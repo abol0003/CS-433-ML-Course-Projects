@@ -82,7 +82,8 @@ def sigmoid(z):
 
 def logistic_loss(y, tx, w, lambda_=0):
     sig = sigmoid(tx.dot(w))
-    loss = -np.mean(y * np.log(sig + 1e-10) + (1 - y) * np.log(1 - sig + 1e-10))
+    eps=1e-10
+    loss = -np.mean(y * np.log(sig + eps) + (1 - y) * np.log(1 - sig + eps))
     if lambda_ > 0:
         loss += lambda_ * np.sum(w**2)
     return loss
