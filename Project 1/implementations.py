@@ -1,8 +1,6 @@
 import numpy as np
 from helpers import *
 
-import numpy as np
-
 def mean_squared_error_gd(y, tx, initial_w, max_iters, gamma):
     ws = [initial_w]
     losses = []
@@ -73,7 +71,7 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     w = initial_w
     for _ in range(max_iters):
         w -= gamma * logistic_gradient(y, tx, w, lambda_=lambda_)
-    return w, logistic_loss(y, tx, w, lambda_=lambda_)
+    return w, logistic_loss(y, tx, w, lambda_=0)
 
 
 ## Additional function computed#####
