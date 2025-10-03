@@ -30,7 +30,7 @@ SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
 
 # ==== Pipeline ====
 DO_PREPROCESS = False   # reuse preprocessed npz if False
-DO_TUNE       = False    # tune or load best params
+DO_TUNE       = True    # tune or load best params
 DO_SUBMISSION = True   # when True: train final model, save weights, build submission & plots
 
 RNG_SEED = 42
@@ -89,18 +89,18 @@ def confusion_matrix(y_true01, y_pred01):
     tp = np.sum((y_true01 == 1) & (y_pred01 == 1))
     return np.array([[tn, fp], [fn, tp]], dtype=int)
 
-def split_train_val_stratified(y01, val_fraction=0.2, seed=42):
-    rng = np.random.RandomState(seed)
-    pos = np.where(y01 == 1)[0]
-    neg = np.where(y01 == 0)[0]
-    rng.shuffle(pos); rng.shuffle(neg) #mix neg and pos separatly to have balanced val
-    n_pos_val = int(len(pos) * val_fraction)
-    n_neg_val = int(len(neg) * val_fraction)
-    val_idx = np.concatenate([pos[:n_pos_val], neg[:n_neg_val]]) #make sure we have the same ratio
-    rng.shuffle(val_idx)#mix pos and neg again
-    mask = np.ones(y01.shape[0], dtype=bool); mask[val_idx] = False
-    train_idx = np.where(mask)[0]
-    return train_idx, val_idx
+# def split_train_val_stratified(y01, val_fraction=0.2, seed=42):
+#     rng = np.random.RandomState(seed)
+#     pos = np.where(y01 == 1)[0]
+#     neg = np.where(y01 == 0)[0]
+#     rng.shuffle(pos); rng.shuffle(neg) #mix neg and pos separatly to have balanced val
+#     n_pos_val = int(len(pos) * val_fraction)
+#     n_neg_val = int(len(neg) * val_fraction)
+#     val_idx = np.concatenate([pos[:n_pos_val], neg[:n_neg_val]]) #make sure we have the same ratio
+#     rng.shuffle(val_idx)#mix pos and neg again
+#     mask = np.ones(y01.shape[0], dtype=bool); mask[val_idx] = False
+#     train_idx = np.where(mask)[0]
+#     return train_idx, val_idx
 
 # =========================
 # ROC/PR ( no sklearn )
@@ -291,22 +291,102 @@ def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix="")
     plot_curve(recall, precision, PR_FIG, xlabel="Recall", ylabel="Precision", title=f"PR (AUC={pr_auc:.4f})")
     print(f"[Figure] PR curve -> {PR_FIG}")
 
-def train_and_eval(args):
-    y_tr_01, X_tr, tr_idx, va_idx, lam, gam, max_iters, thresholds = args
-    w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-    w, loss = impl.reg_logistic_regression(y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam)
-    probs = impl.sigmoid(X_tr[va_idx].dot(w))
-    #find best F1 score
-    best = (-1.0, 0.5, None, 0.0, 0.0)
-    for thr in thresholds:
-        preds = (probs >= thr).astype(int)
-        prec, rec, f1 = precision_recall_f1(y_tr_01[va_idx], preds)
-        if f1 > best[0]:
-            best = (f1, thr, preds, prec, rec)
 
-    best_f1, best_thr, best_preds, best_prec, best_rec = best
-    acc = accuracy_score(y_tr_01[va_idx], best_preds)
-    return (lam, gam, best_thr, acc, best_prec, best_rec, best_f1, probs)
+
+def stratified_kfold_indices(y01, n_splits=5, seed=42): # %val=1/n_splits
+    rng = np.random.RandomState(seed)
+    y = np.asarray(y01).astype(int)
+    pos = np.where(y == 1)[0]
+    neg = np.where(y == 0)[0]
+    rng.shuffle(pos); rng.shuffle(neg)
+    pos_splits = np.array_split(pos, n_splits)
+    neg_splits = np.array_split(neg, n_splits)
+    folds = []
+    for k in range(n_splits):
+        va_idx = np.concatenate([pos_splits[k], neg_splits[k]])
+        rng.shuffle(va_idx)  #mix pos and neg again
+        mask = np.ones(y.shape[0], dtype=bool)
+        mask[va_idx] = False
+        tr_idx = np.where(mask)[0]
+        folds.append((tr_idx, va_idx))
+    return folds
+
+# def cv_train_and_eval(args):
+#     y_tr_01, X_tr, folds, lam, gam, max_iters = args
+
+#     all_va_idx = []
+#     all_probs  = []
+
+#     for (tr_idx, va_idx) in folds:
+#         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
+#         w, _ = impl.reg_logistic_regression(
+#             y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam
+#         )
+#         probs_va = impl.sigmoid(X_tr[va_idx].dot(w))
+#         all_va_idx.append(va_idx)
+#         all_probs.append(probs_va)
+
+#     va_idx_concat = np.concatenate(all_va_idx)
+#     probs_concat  = np.concatenate(all_probs)
+#     y_val_concat  = y_tr_01[va_idx_concat]
+
+#     best_thr, best_prec, best_rec, best_f1 = best_threshold_by_f1(y_val_concat, probs_concat)
+#     acc = accuracy_score(y_val_concat, (probs_concat >= best_thr).astype(int))
+
+#     return (lam, gam, best_thr, acc, best_prec, best_rec, best_f1)
+
+
+def cv_train_and_eval(args):
+    y_tr_01, X_tr, folds, lam, gam, max_iters = args
+    #cross-validation with best threshold found on each fold
+    per_fold_probs, per_fold_idx = [], []
+    for (tr_idx, va_idx) in folds:
+        w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
+        w, _ = impl.reg_logistic_regression(y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam)
+        probs_va = impl.sigmoid(X_tr[va_idx].dot(w))
+        per_fold_probs.append(probs_va)
+        per_fold_idx.append(va_idx)
+
+    va_idx_concat = np.concatenate(per_fold_idx)
+    probs_concat  = np.concatenate(per_fold_probs)
+    y_val_concat  = y_tr_01[va_idx_concat]
+    best_thr, _, _, _ = best_threshold_by_f1(y_val_concat, probs_concat)
+    #evaluate with best_thr on each fold and average ( see slide 4a pg 24)
+    acc_list, prec_list, rec_list, f1_list = [], [], [], []
+    for probs_va, va_idx in zip(per_fold_probs, per_fold_idx):
+        preds = (probs_va >= best_thr).astype(int)
+        y_va  = y_tr_01[va_idx]
+        acc_list.append(accuracy_score(y_va, preds))
+        p, r, f1 = precision_recall_f1(y_va, preds)
+        prec_list.append(p)
+        rec_list.append(r)
+        f1_list.append(f1)
+
+    return (lam, gam, float(best_thr), float(np.mean(acc_list)), float(np.mean(prec_list)),
+            float(np.mean(rec_list)), float(np.mean(f1_list)))
+
+
+import math
+
+def sample_loguniform(low, high, size, rng=np.random.RandomState(RNG_SEED)):
+    lo, hi = math.log(low), math.log(high)
+    return np.exp(rng.uniform(lo, hi, size))
+
+def best_threshold_by_f1(y_true01, scores):
+    y = np.asarray(y_true01)
+    s = np.asarray(scores)
+    order = np.argsort(-s)
+    y = y[order]; s_sorted = s[order]
+    P = np.sum(y == 1)
+    #vectorized computation of precision/recall/f1
+    tps = np.cumsum(y == 1)
+    fps = np.cumsum(y == 0)
+    precision = tps / (tps + fps + 1e-12)
+    recall    = tps / (P + 1e-12)
+    f1        = 2 * precision * recall / (precision + recall + 1e-12)
+    k = int(np.argmax(f1))
+    best_thr = s_sorted[k]               
+    return float(best_thr), float(precision[k]), float(recall[k]), float(f1[k])
 
 # =========================
 # Main
@@ -343,29 +423,35 @@ def main():
         print(f"[Shapes] X_tr={X_tr.shape}, X_te={X_te.shape}, y={y_tr_01.shape}")
 
 
-    tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
-
+    #tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
+    N_TRIALS = 30      
+    N_SPLITS = 5      
+    folds = stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=RNG_SEED)
+    _, va_idx= folds[0]  #for final eval only
     # == Tuning 
-    if DO_TUNE:
-        tasks = []
-        for lam in LAMBDA_GRID:
-            for gam in GAMMA_GRID:
-                tasks.append((y_tr_01, X_tr, tr_idx, va_idx, lam, gam, TUNING_MAX_ITERS, THRESHOLDS))
-        # multiprocessing
-        nproc = max(1, (os.cpu_count() or 2) - 1) 
+    if DO_TUNE:       
+        #Random search over log-uniform grid ( better for computationnal cost )
+        LAMBDA_LOW, LAMBDA_HIGH = 1e-6, 1e-2
+        GAMMA_LOW,  GAMMA_HIGH  = 1e-3, 9e-1
+
+        lambda_samples = sample_loguniform(LAMBDA_LOW, LAMBDA_HIGH, N_TRIALS)
+        gamma_samples  = sample_loguniform(GAMMA_LOW,  GAMMA_HIGH,  N_TRIALS)
+
+        tasks = [(y_tr_01, X_tr, folds, lam, gam, TUNING_MAX_ITERS)
+                for lam, gam in zip(lambda_samples, gamma_samples)]
+
+        nproc = max(1, (os.cpu_count() or 2) - 1)
         with mp.get_context("spawn").Pool(processes=nproc) as pool:
-            results = pool.map(train_and_eval, tasks)
+            results = pool.map(cv_train_and_eval, tasks)
 
         best = None
-        best_probs = None
-        for (lam, gam, thr, acc, prec, rec, f1, probs) in results:
+        for (lam, gam, thr, acc, prec, rec, f1) in results:
             if (best is None) or (f1 > best[-1]):
                 best = (lam, gam, thr, acc, prec, rec, f1)
-                best_probs = probs
 
         best_lambda, best_gamma, best_thr, val_acc, val_prec, val_rec, val_f1 = best
-        print(f"[BEST] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
-              f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
+        print(f"[BEST-CV] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
+            f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
 
         np.savez(
             SAVE_BEST,
@@ -375,13 +461,20 @@ def main():
         print(f"[Saved] Best params -> {SAVE_BEST}")
 
     else:
-        bp = np.load(SAVE_BEST, allow_pickle=False)
-        best_lambda = float(bp["lambda_"])
-        best_gamma  = float(bp["gamma"])
-        best_thr    = float(bp["thr"])
-        print(f"[Loaded] Best params from {SAVE_BEST}: "
-                f"lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}")
-
+        if not os.path.exists(SAVE_BEST):
+            raise FileNotFoundError(f"{SAVE_BEST} not found.")
+        npz = np.load(SAVE_BEST, allow_pickle=False)
+        best_lambda = float(npz["lambda_"])
+        best_gamma  = float(npz["gamma"])
+        best_thr    = float(npz["thr"])
+        val_acc     = float(npz["acc"])
+        val_prec    = float(npz["prec"])
+        val_rec     = float(npz["rec"])
+        val_f1      = float(npz["f1"])
+        print(f"[Loaded] Best params from -> {SAVE_BEST}")
+        print(f"[BEST] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
+          f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
+        
     # == Final training 
     if DO_SUBMISSION:
         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
