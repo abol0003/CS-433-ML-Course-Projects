@@ -8,22 +8,19 @@ import matplotlib.pyplot as plt
 
 import helpers 
 # clearer than : from helpers import * As we use suffixes.
-import implementations as impl
+import implementations 
+# avoid using Aliases: import implementations as impl
 import config 
 import preprocessing 
 import metrics 
 import plots
 import cv_utils
 
-
 os.makedirs(config.PICT_DIR, exist_ok=True)
 os.makedirs(config.SAVE_DIR, exist_ok=True)
 np.random.seed(config.RNG_SEED)
 
 
-# =========================
-# ROC/PR ( no sklearn )
-# =========================
 def binary_clf_curves(y_true01, scores):
     y = np.asarray(y_true01)
     s = np.asarray(scores)
@@ -62,31 +59,17 @@ def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix="")
     print(f"[Figure] PR curve -> {config.PR_FIG}")
 
 
+#========================================
+#the two functions above will be removed. 
+#========================================
+
+
 def sample_loguniform(low, high, size, rng=np.random.RandomState(config.RNG_SEED)):
     lo, hi = np.log(low), np.log(high)
     return np.exp(rng.uniform(lo, hi, size))
 
 
 def preprocess_data():
-    return 
-
-
-def tune_hyperparameter():
-    return 
-
-
-def train_final_model():
-    return 
-
-
-def make_submission():
-    return 
-
-
-def main():
-    t0 = time.time()
-    print("Loading data from:", config.DATA_DIR)
-
     if config.DO_PREPROCESS:
         x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
         uniq, cnt = np.unique(y_train_pm1, return_counts=True)
@@ -114,19 +97,15 @@ def main():
         print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
         print(f"[Shapes] X_tr={X_tr.shape}, X_te={X_te.shape}, y={y_tr_01.shape}")
 
-
-    #tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
-    N_TRIALS = 30      
-    N_SPLITS = 5      
-    folds = cv_utils.stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
-    _, va_idx= folds[0]  #for final eval only
+    return X_tr, X_te, y_tr_01, train_ids, test_ids
 
 
+def tune_hyperparameter(X_tr, y_tr_01, folds):
     if config.DO_TUNE:       
         #Random search over log-uniform grid ( better for computationnal cost )
         LAMBDA_LOW, LAMBDA_HIGH = 1e-6, 1e-2
         GAMMA_LOW,  GAMMA_HIGH  = 1e-3, 9e-1
-
+        N_TRIALS = 30   
         lambda_samples = sample_loguniform(LAMBDA_LOW, LAMBDA_HIGH, N_TRIALS)
         gamma_samples  = sample_loguniform(GAMMA_LOW,  GAMMA_HIGH,  N_TRIALS)
 
@@ -168,29 +147,55 @@ def main():
         print(f"[BEST] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
           f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
         
+    return best_lambda, best_gamma, best_thr
+
+
+def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
+    w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
+    w_final, final_loss = implementations.reg_logistic_regression(
+        y_tr_01, X_tr, best_lambda, w0, max_iters=config.FINAL_MAX_ITERS, gamma=best_gamma
+    )
+    print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
+
+    np.save(config.SAVE_WEIGHTS, w_final)
+    print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
+
+    return w_final
+
+
+def make_submission(X_te, w_final, best_thr, test_ids):
+    """Generete predications and submission file."""
+    probs_te = implementations.sigmoid(X_te.dot(w_final))
+    preds01_te = (probs_te >= best_thr).astype(int)
+    preds_pm1_te = metrics.to_pm1_labels(preds01_te)
+    helpers.create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
+    print(f"[Submission] saved -> {config.OUTPUT_PRED}")
+   
+
+def main():
+    t0 = time.time()
+    print("Loading data from:", config.DATA_DIR)
+
+    X_tr, X_te, y_tr_01, train_ids, test_ids = preprocess_data()
+
+    #tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
+       
+    N_SPLITS = 5      
+    folds = cv_utils.stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
+    _, va_idx= folds[0]  #for final eval only
+
+    best_lambda, best_gamma, best_thr = tune_hyperparameter(X_tr, y_tr_01, folds)
+
+
     # == Final training 
     if config.DO_SUBMISSION:
-        w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-        w_final, final_loss = impl.reg_logistic_regression(
-            y_tr_01, X_tr, best_lambda, w0, max_iters=config.FINAL_MAX_ITERS, gamma=best_gamma
-        )
-        print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
-
-        np.save(config.SAVE_WEIGHTS, w_final)
-        print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
-
-        # Test predictions + submission
-        probs_te = impl.sigmoid(X_te.dot(w_final))
-        preds01_te = (probs_te >= best_thr).astype(int)
-        preds_pm1_te = metrics.to_pm1_labels(preds01_te)
-        helpers.create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
-        print(f"[Submission] saved -> {config.OUTPUT_PRED}")
+        w_final = train_final_model(X_tr, y_tr_01, best_lambda, best_gamma)
+        make_submission(X_te, w_final, best_thr, test_ids)
 
         # validation metrics & plots using the final model
-        probs_va_final = impl.sigmoid(X_tr[va_idx].dot(w_final))
-        evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va_final, best_thr)
+        #probs_va_final = implementations.sigmoid(X_tr[va_idx].dot(w_final))
+        #evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va_final, best_thr)
 
         print(f"Done in {time.time() - t0:.1f}s.")
-
 if __name__ == "__main__":
     main()
