@@ -14,47 +14,11 @@ import config
 # =========================
 # User config
 # =========================
-DATA_DIR = r"./data/dataset/"
-OUTPUT_PRED = "submission_best.csv"
 
-PICT_DIR = "picture"
-os.makedirs(PICT_DIR, exist_ok=True)
-CONF_MAT_FIG = os.path.join(PICT_DIR, "confusion_matrix.png")
-ROC_FIG      = os.path.join(PICT_DIR, "roc_curve.png")
-PR_FIG       = os.path.join(PICT_DIR, "pr_curve.png")
+os.makedirs(config.PICT_DIR, exist_ok=True)
+os.makedirs(config.SAVE_DIR, exist_ok=True)
+np.random.seed(config.RNG_SEED)
 
-SAVE_DIR = "data_saving"
-os.makedirs(SAVE_DIR, exist_ok=True)
-
-SAVE_PREPROCESSED = os.path.join(SAVE_DIR, "preprocessed_data.npz")
-SAVE_BEST         = os.path.join(SAVE_DIR, "best_params.npz")
-SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
-
-# ==== Pipeline ====
-DO_PREPROCESS = False   # reuse preprocessed npz if False
-DO_TUNE       = False    # tune or load best params
-DO_SUBMISSION = True   # when True: train final model, save weights, build submission & plots
-
-RNG_SEED = 42
-np.random.seed(RNG_SEED)
-
-# Tuning
-HOLDOUT_VAL_FRAC = 0.20
-TUNING_MAX_ITERS = 400
-FINAL_MAX_ITERS  = 600
-# GAMMA_GRID  = [1.515e-3, 1.52e-3, 1.525e-3, 1.49e-3, 1.505e-3]
-# LAMBDA_GRID = [1.5e-3, 1.505e-3, 1.502e-3, 1.485e-3, 1.49e-3]
-# THRESHOLDS  = [0.5302, 0.531, 0.527, 0.53, 0.529, 0.532]
-GAMMA_GRID = [1e-3]#, 5e-4]
-LAMBDA_GRID = [1e-3]#, 1.5e-3, 1e-1]
-THRESHOLDS = [0.50, 0.55]#, 0.60, 0.65, 0.70, 0.75]
-#[BEST] lambda=1.500e-03, gamma=1.520e-03, thr=0.53, ACC=0.8586, P=0.3203, R=0.5355, F1=0.4008 
-    #0.383	0.902
-
-# Light one-hot
-LOW_CARD_MAX_UNIQUE = 10
-ONEHOT_PER_FEAT_MAX = 8
-MAX_ADDED_ONEHOT    = 120
 
 # =========================
 # Metrics & splits
@@ -249,9 +213,9 @@ def preprocess(x_train, x_test, printable=True):
 
     # Light one-hot 
     Xtr_new, Xte_new, keep_idx, used_idx, plan = one_hot_encoding(Xtr, Xte,
-    max_unique=LOW_CARD_MAX_UNIQUE,
-    per_feat_cap=ONEHOT_PER_FEAT_MAX,
-    global_cap=MAX_ADDED_ONEHOT)
+    max_unique = config.LOW_CARD_MAX_UNIQUE,
+    per_feat_cap = config.ONEHOT_PER_FEAT_MAX,
+    global_cap = config.MAX_ADDED_ONEHOT)
     if printable:
         print(f"[Preprocess] one-hot: kept {len(keep_idx)} raw cols, "
           f"encoded {len(used_idx)} cols, plan size={sum(len(v) for _, v in plan)}")
@@ -283,15 +247,15 @@ def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix="")
 
     # Confusion matrix
     cm = confusion_matrix(y_tr_01[va_idx], preds_va)
-    plot_confusion_matrix(cm, CONF_MAT_FIG, class_names=("0","1"))
-    print(f"[Figure] Confusion matrix -> {CONF_MAT_FIG}")
+    plot_confusion_matrix(cm, config.CONF_MAT_FIG, class_names=("0","1"))
+    print(f"[Figure] Confusion matrix -> {config.CONF_MAT_FIG}")
 
     # ROC & PR 
     fpr, tpr, precision, recall, roc_auc, pr_auc = binary_clf_curves(y_tr_01[va_idx], probs_va)
-    plot_curve(fpr, tpr, ROC_FIG, xlabel="FPR", ylabel="TPR", title=f"ROC (AUC={roc_auc:.4f})")
-    print(f"[Figure] ROC curve -> {ROC_FIG}")
-    plot_curve(recall, precision, PR_FIG, xlabel="Recall", ylabel="Precision", title=f"PR (AUC={pr_auc:.4f})")
-    print(f"[Figure] PR curve -> {PR_FIG}")
+    plot_curve(fpr, tpr, config.ROC_FIG, xlabel="FPR", ylabel="TPR", title=f"ROC (AUC={roc_auc:.4f})")
+    print(f"[Figure] ROC curve -> {config.ROC_FIG}")
+    plot_curve(recall, precision, config.PR_FIG, xlabel="Recall", ylabel="Precision", title=f"PR (AUC={pr_auc:.4f})")
+    print(f"[Figure] PR curve -> {config.PR_FIG}")
 
 
 
@@ -370,7 +334,7 @@ def cv_train_and_eval(args):
 
 import math
 
-def sample_loguniform(low, high, size, rng=np.random.RandomState(RNG_SEED)):
+def sample_loguniform(low, high, size, rng=np.random.RandomState(config.RNG_SEED)):
     lo, hi = math.log(low), math.log(high)
     return np.exp(rng.uniform(lo, hi, size))
 
@@ -395,10 +359,10 @@ def best_threshold_by_f1(y_true01, scores):
 # =========================
 def main():
     t0 = time.time()
-    print("Loading data from:", DATA_DIR)
+    print("Loading data from:", config.DATA_DIR)
 
-    if DO_PREPROCESS:
-        x_train, x_test, y_train_pm1, train_ids, test_ids = load_csv_data(DATA_DIR)
+    if config.DO_PREPROCESS:
+        x_train, x_test, y_train_pm1, train_ids, test_ids = load_csv_data(config.DATA_DIR)
         uniq, cnt = np.unique(y_train_pm1, return_counts=True)
         print("Label counts (in {-1,+1}):", dict(zip(uniq.astype(int), cnt)))
 
@@ -406,32 +370,32 @@ def main():
         y_tr_01 = to01_labels(y_train_pm1)
 
         np.savez_compressed(
-            SAVE_PREPROCESSED,
+            config.SAVE_PREPROCESSED,
             X_train=X_tr, X_test=X_te, y_train=y_tr_01,
             train_ids=train_ids, test_ids=test_ids
         )
-        print(f"[Saved] Preprocessed data -> {SAVE_PREPROCESSED}")
+        print(f"[Saved] Preprocessed data -> {config.SAVE_PREPROCESSED}")
 
     else:
-        if not os.path.exists(SAVE_PREPROCESSED):
-            raise FileNotFoundError(f"{SAVE_PREPROCESSED} not found.")
-        npz = np.load(SAVE_PREPROCESSED, allow_pickle=False)
+        if not os.path.exists(config.SAVE_PREPROCESSED):
+            raise FileNotFoundError(f"{config.SAVE_PREPROCESSED} not found.")
+        npz = np.load(config.SAVE_PREPROCESSED, allow_pickle=False)
         X_tr     = npz["X_train"]
         X_te     = npz["X_test"]
         y_tr_01  = npz["y_train"]
         train_ids = npz["train_ids"]
         test_ids  = npz["test_ids"]
-        print(f"[Loaded] Preprocessed data from -> {SAVE_PREPROCESSED}")
+        print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
         print(f"[Shapes] X_tr={X_tr.shape}, X_te={X_te.shape}, y={y_tr_01.shape}")
 
 
     #tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
     N_TRIALS = 30      
     N_SPLITS = 5      
-    folds = stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=RNG_SEED)
+    folds = stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
     _, va_idx= folds[0]  #for final eval only
     # == Tuning 
-    if DO_TUNE:       
+    if config.DO_TUNE:       
         #Random search over log-uniform grid ( better for computationnal cost )
         LAMBDA_LOW, LAMBDA_HIGH = 1e-6, 1e-2
         GAMMA_LOW,  GAMMA_HIGH  = 1e-3, 9e-1
@@ -439,7 +403,7 @@ def main():
         lambda_samples = sample_loguniform(LAMBDA_LOW, LAMBDA_HIGH, N_TRIALS)
         gamma_samples  = sample_loguniform(GAMMA_LOW,  GAMMA_HIGH,  N_TRIALS)
 
-        tasks = [(y_tr_01, X_tr, folds, lam, gam, TUNING_MAX_ITERS)
+        tasks = [(y_tr_01, X_tr, folds, lam, gam, config.TUNING_MAX_ITERS)
                 for lam, gam in zip(lambda_samples, gamma_samples)]
 
         nproc = max(1, (os.cpu_count() or 2) - 1)
@@ -456,16 +420,16 @@ def main():
             f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
 
         np.savez(
-            SAVE_BEST,
+            config.SAVE_BEST,
             lambda_=best_lambda, gamma=best_gamma, thr=best_thr,
             acc=val_acc, prec=val_prec, rec=val_rec, f1=val_f1
         )
-        print(f"[Saved] Best params -> {SAVE_BEST}")
+        print(f"[Saved] Best params -> {config.SAVE_BEST}")
 
     else:
-        if not os.path.exists(SAVE_BEST):
-            raise FileNotFoundError(f"{SAVE_BEST} not found.")
-        npz = np.load(SAVE_BEST, allow_pickle=False)
+        if not os.path.exists(config.SAVE_BEST):
+            raise FileNotFoundError(f"{config.SAVE_BEST} not found.")
+        npz = np.load(config.SAVE_BEST, allow_pickle=False)
         best_lambda = float(npz["lambda_"])
         best_gamma  = float(npz["gamma"])
         best_thr    = float(npz["thr"])
@@ -473,27 +437,27 @@ def main():
         val_prec    = float(npz["prec"])
         val_rec     = float(npz["rec"])
         val_f1      = float(npz["f1"])
-        print(f"[Loaded] Best params from -> {SAVE_BEST}")
+        print(f"[Loaded] Best params from -> {config.SAVE_BEST}")
         print(f"[BEST] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
           f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
         
     # == Final training 
-    if DO_SUBMISSION:
+    if config.DO_SUBMISSION:
         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
         w_final, final_loss = impl.reg_logistic_regression(
-            y_tr_01, X_tr, best_lambda, w0, max_iters=FINAL_MAX_ITERS, gamma=best_gamma
+            y_tr_01, X_tr, best_lambda, w0, max_iters=config.FINAL_MAX_ITERS, gamma=best_gamma
         )
         print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
 
-        np.save(SAVE_WEIGHTS, w_final)
-        print(f"[Saved] Final weights -> {SAVE_WEIGHTS}")
+        np.save(config.SAVE_WEIGHTS, w_final)
+        print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
 
         # Test predictions + submission
         probs_te = impl.sigmoid(X_te.dot(w_final))
         preds01_te = (probs_te >= best_thr).astype(int)
         preds_pm1_te = to_pm1_labels(preds01_te)
-        create_csv_submission(test_ids, preds_pm1_te, OUTPUT_PRED)
-        print(f"[Submission] saved -> {OUTPUT_PRED}")
+        create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
+        print(f"[Submission] saved -> {config.OUTPUT_PRED}")
 
         # validation metrics & plots using the final model
         probs_va_final = impl.sigmoid(X_tr[va_idx].dot(w_final))
