@@ -13,6 +13,7 @@ import config
 import preprocessing 
 import metrics 
 import plots
+import cv_utils
 
 
 os.makedirs(config.PICT_DIR, exist_ok=True)
@@ -41,9 +42,6 @@ def binary_clf_curves(y_true01, scores):
     return fpr, tpr, precision, recall, roc_auc, pr_auc
 
 
-# =========================
-# Model utils
-# =========================
 def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix=""):
     """Compute final metrics on hold-out (with final model), save plots."""
     preds_va = (probs_va >= thr).astype(int)
@@ -64,105 +62,27 @@ def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix="")
     print(f"[Figure] PR curve -> {config.PR_FIG}")
 
 
-
-def stratified_kfold_indices(y01, n_splits=5, seed=42): # %val=1/n_splits
-    rng = np.random.RandomState(seed)
-    y = np.asarray(y01).astype(int)
-    pos = np.where(y == 1)[0]
-    neg = np.where(y == 0)[0]
-    rng.shuffle(pos); rng.shuffle(neg)
-    pos_splits = np.array_split(pos, n_splits)
-    neg_splits = np.array_split(neg, n_splits)
-    folds = []
-    for k in range(n_splits):
-        va_idx = np.concatenate([pos_splits[k], neg_splits[k]])
-        rng.shuffle(va_idx)  #mix pos and neg again
-        mask = np.ones(y.shape[0], dtype=bool)
-        mask[va_idx] = False
-        tr_idx = np.where(mask)[0]
-        folds.append((tr_idx, va_idx))
-    return folds
-
-# def cv_train_and_eval(args):
-#     y_tr_01, X_tr, folds, lam, gam, max_iters = args
-
-#     all_va_idx = []
-#     all_probs  = []
-
-#     for (tr_idx, va_idx) in folds:
-#         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-#         w, _ = impl.reg_logistic_regression(
-#             y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam
-#         )
-#         probs_va = impl.sigmoid(X_tr[va_idx].dot(w))
-#         all_va_idx.append(va_idx)
-#         all_probs.append(probs_va)
-
-#     va_idx_concat = np.concatenate(all_va_idx)
-#     probs_concat  = np.concatenate(all_probs)
-#     y_val_concat  = y_tr_01[va_idx_concat]
-
-#     best_thr, best_prec, best_rec, best_f1 = best_threshold_by_f1(y_val_concat, probs_concat)
-#     acc = accuracy_score(y_val_concat, (probs_concat >= best_thr).astype(int))
-
-#     return (lam, gam, best_thr, acc, best_prec, best_rec, best_f1)
-
-
-def cv_train_and_eval(args):
-    y_tr_01, X_tr, folds, lam, gam, max_iters = args
-    #cross-validation with best threshold found on each fold
-    per_fold_probs, per_fold_idx = [], []
-    for (tr_idx, va_idx) in folds:
-        w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-        w, _ = impl.reg_logistic_regression(y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam)
-        probs_va = impl.sigmoid(X_tr[va_idx].dot(w))
-        per_fold_probs.append(probs_va)
-        per_fold_idx.append(va_idx)
-
-    va_idx_concat = np.concatenate(per_fold_idx)
-    probs_concat  = np.concatenate(per_fold_probs)
-    y_val_concat  = y_tr_01[va_idx_concat]
-    best_thr, _, _, _ = best_threshold_by_f1(y_val_concat, probs_concat)
-    #evaluate with best_thr on each fold and average ( see slide 4a pg 24)
-    acc_list, prec_list, rec_list, f1_list = [], [], [], []
-    for probs_va, va_idx in zip(per_fold_probs, per_fold_idx):
-        preds = (probs_va >= best_thr).astype(int)
-        y_va  = y_tr_01[va_idx]
-        acc_list.append(metrics.accuracy_score(y_va, preds))
-        p, r, f1 = metrics.precision_recall_f1(y_va, preds)
-        prec_list.append(p)
-        rec_list.append(r)
-        f1_list.append(f1)
-
-    return (lam, gam, float(best_thr), float(np.mean(acc_list)), float(np.mean(prec_list)),
-            float(np.mean(rec_list)), float(np.mean(f1_list)))
-
-
-import math
-
 def sample_loguniform(low, high, size, rng=np.random.RandomState(config.RNG_SEED)):
-    lo, hi = math.log(low), math.log(high)
+    lo, hi = np.log(low), np.log(high)
     return np.exp(rng.uniform(lo, hi, size))
 
-def best_threshold_by_f1(y_true01, scores):
-    y = np.asarray(y_true01)
-    s = np.asarray(scores)
-    order = np.argsort(-s)
-    y = y[order]; s_sorted = s[order]
-    P = np.sum(y == 1)
-    #vectorized computation of precision/recall/f1
-    tps = np.cumsum(y == 1)
-    fps = np.cumsum(y == 0)
-    precision = tps / (tps + fps + 1e-12)
-    recall    = tps / (P + 1e-12)
-    f1        = 2 * precision * recall / (precision + recall + 1e-12)
-    k = int(np.argmax(f1))
-    best_thr = s_sorted[k]               
-    return float(best_thr), float(precision[k]), float(recall[k]), float(f1[k])
 
-# =========================
-# Main
-# =========================
+def preprocess_data():
+    return 
+
+
+def tune_hyperparameter():
+    return 
+
+
+def train_final_model():
+    return 
+
+
+def make_submission():
+    return 
+
+
 def main():
     t0 = time.time()
     print("Loading data from:", config.DATA_DIR)
@@ -198,9 +118,10 @@ def main():
     #tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
     N_TRIALS = 30      
     N_SPLITS = 5      
-    folds = stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
+    folds = cv_utils.stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
     _, va_idx= folds[0]  #for final eval only
-    # == Tuning 
+
+
     if config.DO_TUNE:       
         #Random search over log-uniform grid ( better for computationnal cost )
         LAMBDA_LOW, LAMBDA_HIGH = 1e-6, 1e-2
@@ -214,7 +135,7 @@ def main():
 
         nproc = max(1, (os.cpu_count() or 2) - 1)
         with mp.get_context("spawn").Pool(processes=nproc) as pool:
-            results = pool.map(cv_train_and_eval, tasks)
+            results = pool.map(cv_utils.cv_train_and_eval, tasks)
 
         best = None
         for (lam, gam, thr, acc, prec, rec, f1) in results:
