@@ -6,7 +6,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from helpers import *
+import helpers 
+# clearer than : from helpers import * As we use suffixes.
 import implementations as impl
 
 import config 
@@ -18,55 +19,6 @@ import config
 os.makedirs(config.PICT_DIR, exist_ok=True)
 os.makedirs(config.SAVE_DIR, exist_ok=True)
 np.random.seed(config.RNG_SEED)
-
-
-# =========================
-# Metrics & splits
-# =========================
-def to01_labels(y_pm1):
-    return (y_pm1 > 0).astype(np.uint8)
-
-def to_pm1_labels(y01):
-    return np.where(y01 == 1, 1, -1).astype(np.int32)
-
-def accuracy_score(y_true01, y_pred01):
-    y_true01 = np.asarray(y_true01)
-    y_pred01 = np.asarray(y_pred01)
-    return float(np.mean(y_true01 == y_pred01))
-
-def precision_recall_f1(y_true01, y_pred01):
-    eps=1e-12
-    y_true01 = np.asarray(y_true01)
-    y_pred01 = np.asarray(y_pred01)
-    tp = np.sum((y_true01 == 1) & (y_pred01 == 1))
-    fp = np.sum((y_true01 == 0) & (y_pred01 == 1))
-    fn = np.sum((y_true01 == 1) & (y_pred01 == 0))
-    precision = tp / (tp + fp + eps)
-    recall    = tp / (tp + fn + eps)
-    f1        = 2 * precision * recall / (precision + recall + eps)
-    return float(precision), float(recall), float(f1)
-
-def confusion_matrix(y_true01, y_pred01):
-    y_true01 = np.asarray(y_true01)
-    y_pred01 = np.asarray(y_pred01)
-    tn = np.sum((y_true01 == 0) & (y_pred01 == 0))
-    fp = np.sum((y_true01 == 0) & (y_pred01 == 1))
-    fn = np.sum((y_true01 == 1) & (y_pred01 == 0))
-    tp = np.sum((y_true01 == 1) & (y_pred01 == 1))
-    return np.array([[tn, fp], [fn, tp]], dtype=int)
-
-# def split_train_val_stratified(y01, val_fraction=0.2, seed=42):
-#     rng = np.random.RandomState(seed)
-#     pos = np.where(y01 == 1)[0]
-#     neg = np.where(y01 == 0)[0]
-#     rng.shuffle(pos); rng.shuffle(neg) #mix neg and pos separatly to have balanced val
-#     n_pos_val = int(len(pos) * val_fraction)
-#     n_neg_val = int(len(neg) * val_fraction)
-#     val_idx = np.concatenate([pos[:n_pos_val], neg[:n_neg_val]]) #make sure we have the same ratio
-#     rng.shuffle(val_idx)#mix pos and neg again
-#     mask = np.ones(y01.shape[0], dtype=bool); mask[val_idx] = False
-#     train_idx = np.where(mask)[0]
-#     return train_idx, val_idx
 
 # =========================
 # ROC/PR ( no sklearn )
@@ -241,12 +193,12 @@ def preprocess(x_train, x_test, printable=True):
 def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix=""):
     """Compute final metrics on hold-out (with final model), save plots."""
     preds_va = (probs_va >= thr).astype(int)
-    acc = accuracy_score(y_tr_01[va_idx], preds_va)
-    prec, rec, f1 = precision_recall_f1(y_tr_01[va_idx], preds_va)
+    acc = helpers.accuracy_score(y_tr_01[va_idx], preds_va)
+    prec, rec, f1 = helpers.precision_recall_f1(y_tr_01[va_idx], preds_va)
     print(f"[FINAL] ACC={acc:.4f}  P={prec:.4f}  R={rec:.4f}  F1={f1:.4f}")
 
     # Confusion matrix
-    cm = confusion_matrix(y_tr_01[va_idx], preds_va)
+    cm = helpers.confusion_matrix(y_tr_01[va_idx], preds_va)
     plot_confusion_matrix(cm, config.CONF_MAT_FIG, class_names=("0","1"))
     print(f"[Figure] Confusion matrix -> {config.CONF_MAT_FIG}")
 
@@ -322,8 +274,8 @@ def cv_train_and_eval(args):
     for probs_va, va_idx in zip(per_fold_probs, per_fold_idx):
         preds = (probs_va >= best_thr).astype(int)
         y_va  = y_tr_01[va_idx]
-        acc_list.append(accuracy_score(y_va, preds))
-        p, r, f1 = precision_recall_f1(y_va, preds)
+        acc_list.append(helpers.accuracy_score(y_va, preds))
+        p, r, f1 = helpers.precision_recall_f1(y_va, preds)
         prec_list.append(p)
         rec_list.append(r)
         f1_list.append(f1)
@@ -362,12 +314,12 @@ def main():
     print("Loading data from:", config.DATA_DIR)
 
     if config.DO_PREPROCESS:
-        x_train, x_test, y_train_pm1, train_ids, test_ids = load_csv_data(config.DATA_DIR)
+        x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
         uniq, cnt = np.unique(y_train_pm1, return_counts=True)
         print("Label counts (in {-1,+1}):", dict(zip(uniq.astype(int), cnt)))
 
         X_tr, X_te = preprocess(x_train, x_test,True)
-        y_tr_01 = to01_labels(y_train_pm1)
+        y_tr_01 = helpers.to01_labels(y_train_pm1)
 
         np.savez_compressed(
             config.SAVE_PREPROCESSED,
@@ -455,8 +407,8 @@ def main():
         # Test predictions + submission
         probs_te = impl.sigmoid(X_te.dot(w_final))
         preds01_te = (probs_te >= best_thr).astype(int)
-        preds_pm1_te = to_pm1_labels(preds01_te)
-        create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
+        preds_pm1_te = helpers.to_pm1_labels(preds01_te)
+        helpers.create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
         print(f"[Submission] saved -> {config.OUTPUT_PRED}")
 
         # validation metrics & plots using the final model
