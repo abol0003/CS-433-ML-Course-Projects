@@ -11,8 +11,8 @@ import helpers
 import implementations as impl
 import config 
 import preprocessing 
-
 import metrics 
+import plots
 
 
 os.makedirs(config.PICT_DIR, exist_ok=True)
@@ -40,39 +40,6 @@ def binary_clf_curves(y_true01, scores):
     pr_auc = float(np.trapezoid(precision, recall))
     return fpr, tpr, precision, recall, roc_auc, pr_auc
 
-def plot_confusion_matrix(cm, path, class_names=("0","1")):
-    fig, ax = plt.subplots()
-    ax.imshow(cm, cmap="Blues") 
-    ax.set_xticks(np.arange(len(class_names)))
-    ax.set_yticks(np.arange(len(class_names)))
-    ax.set_xticklabels(class_names)
-    ax.set_yticklabels(class_names)
-    ax.set_xlabel("Predicted label")
-    ax.set_ylabel("True label")
-    ax.set_title("Confusion Matrix")
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(j, i, cm[i, j], ha="center", va="center", color="black")
-
-    fig.tight_layout()
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-
-def plot_curve(x, y, path, xlabel, ylabel, title):
-    fig, ax = plt.subplots(figsize=(5.0, 4.2))
-    ax.plot(x, y, linewidth=2)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-    fig.tight_layout()
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-
-# =========================
-# Preprocessing
-# =========================
-
 
 # =========================
 # Model utils
@@ -86,14 +53,14 @@ def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix="")
 
     # Confusion matrix
     cm = metrics.confusion_matrix(y_tr_01[va_idx], preds_va)
-    plot_confusion_matrix(cm, config.CONF_MAT_FIG, class_names=("0","1"))
+    plots.plot_confusion_matrix(cm, config.CONF_MAT_FIG, class_names=("0","1"))
     print(f"[Figure] Confusion matrix -> {config.CONF_MAT_FIG}")
 
     # ROC & PR 
     fpr, tpr, precision, recall, roc_auc, pr_auc = binary_clf_curves(y_tr_01[va_idx], probs_va)
-    plot_curve(fpr, tpr, config.ROC_FIG, xlabel="FPR", ylabel="TPR", title=f"ROC (AUC={roc_auc:.4f})")
+    plots.plot_curve(fpr, tpr, config.ROC_FIG, xlabel="FPR", ylabel="TPR", title=f"ROC (AUC={roc_auc:.4f})")
     print(f"[Figure] ROC curve -> {config.ROC_FIG}")
-    plot_curve(recall, precision, config.PR_FIG, xlabel="Recall", ylabel="Precision", title=f"PR (AUC={pr_auc:.4f})")
+    plots.plot_curve(recall, precision, config.PR_FIG, xlabel="Recall", ylabel="Precision", title=f"PR (AUC={pr_auc:.4f})")
     print(f"[Figure] PR curve -> {config.PR_FIG}")
 
 
