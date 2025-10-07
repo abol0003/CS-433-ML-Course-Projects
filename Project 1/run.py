@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from helpers import *
 import implementations as impl
 
+import config 
+
 # =========================
 # User config
 # =========================
@@ -30,7 +32,7 @@ SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
 
 # ==== Pipeline ====
 DO_PREPROCESS = False   # reuse preprocessed npz if False
-DO_TUNE       = True    # tune or load best params
+DO_TUNE       = False    # tune or load best params
 DO_SUBMISSION = True   # when True: train final model, save weights, build submission & plots
 
 RNG_SEED = 42

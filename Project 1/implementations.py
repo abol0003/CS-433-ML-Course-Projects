@@ -76,6 +76,8 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
 
 
 ## Additional function computed#####
+
+
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
 

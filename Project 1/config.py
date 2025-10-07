@@ -1,0 +1,1 @@
+# all configuration variables and constants
