@@ -12,11 +12,13 @@ import implementations as impl
 import config 
 import preprocessing 
 
+import metrics 
 
 
 os.makedirs(config.PICT_DIR, exist_ok=True)
 os.makedirs(config.SAVE_DIR, exist_ok=True)
 np.random.seed(config.RNG_SEED)
+
 
 # =========================
 # ROC/PR ( no sklearn )
@@ -78,12 +80,12 @@ def plot_curve(x, y, path, xlabel, ylabel, title):
 def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix=""):
     """Compute final metrics on hold-out (with final model), save plots."""
     preds_va = (probs_va >= thr).astype(int)
-    acc = helpers.accuracy_score(y_tr_01[va_idx], preds_va)
-    prec, rec, f1 = helpers.precision_recall_f1(y_tr_01[va_idx], preds_va)
+    acc = metrics.accuracy_score(y_tr_01[va_idx], preds_va)
+    prec, rec, f1 = metrics.precision_recall_f1(y_tr_01[va_idx], preds_va)
     print(f"[FINAL] ACC={acc:.4f}  P={prec:.4f}  R={rec:.4f}  F1={f1:.4f}")
 
     # Confusion matrix
-    cm = helpers.confusion_matrix(y_tr_01[va_idx], preds_va)
+    cm = metrics.confusion_matrix(y_tr_01[va_idx], preds_va)
     plot_confusion_matrix(cm, config.CONF_MAT_FIG, class_names=("0","1"))
     print(f"[Figure] Confusion matrix -> {config.CONF_MAT_FIG}")
 
@@ -159,8 +161,8 @@ def cv_train_and_eval(args):
     for probs_va, va_idx in zip(per_fold_probs, per_fold_idx):
         preds = (probs_va >= best_thr).astype(int)
         y_va  = y_tr_01[va_idx]
-        acc_list.append(helpers.accuracy_score(y_va, preds))
-        p, r, f1 = helpers.precision_recall_f1(y_va, preds)
+        acc_list.append(metrics.accuracy_score(y_va, preds))
+        p, r, f1 = metrics.precision_recall_f1(y_va, preds)
         prec_list.append(p)
         rec_list.append(r)
         f1_list.append(f1)
@@ -204,7 +206,7 @@ def main():
         print("Label counts (in {-1,+1}):", dict(zip(uniq.astype(int), cnt)))
 
         X_tr, X_te = preprocessing.preprocess(x_train, x_test,True)
-        y_tr_01 = helpers.to01_labels(y_train_pm1)
+        y_tr_01 = metrics.to01_labels(y_train_pm1)
 
         np.savez_compressed(
             config.SAVE_PREPROCESSED,
@@ -292,7 +294,7 @@ def main():
         # Test predictions + submission
         probs_te = impl.sigmoid(X_te.dot(w_final))
         preds01_te = (probs_te >= best_thr).astype(int)
-        preds_pm1_te = helpers.to_pm1_labels(preds01_te)
+        preds_pm1_te = metrics.to_pm1_labels(preds01_te)
         helpers.create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
         print(f"[Submission] saved -> {config.OUTPUT_PRED}")
 
