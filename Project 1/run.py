@@ -70,13 +70,16 @@ def sample_loguniform(low, high, size, rng=np.random.RandomState(config.RNG_SEED
 
 
 def preprocess_data():
+    t_preprocess = time.time()
+
     if config.DO_PREPROCESS:
         x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
-        uniq, cnt = np.unique(y_train_pm1, return_counts=True)
-        print("Label counts (in {-1,+1}):", dict(zip(uniq.astype(int), cnt)))
 
-        X_tr, X_te = preprocessing.preprocess(x_train, x_test,True)
-        y_tr_01 = metrics.to01_labels(y_train_pm1)
+        X_tr, X_te = preprocessing.preprocess(x_train, x_test, True)
+        
+        # is it really necessary ? 
+        # can't we not just do that to predictions {-1, +1} to {0, 1}
+        y_tr_01 = metrics.to01_labels(y_train_pm1) 
 
         np.savez_compressed(
             config.SAVE_PREPROCESSED,
@@ -88,19 +91,21 @@ def preprocess_data():
     else:
         if not os.path.exists(config.SAVE_PREPROCESSED):
             raise FileNotFoundError(f"{config.SAVE_PREPROCESSED} not found.")
-        npz = np.load(config.SAVE_PREPROCESSED, allow_pickle=False)
+        npz = np.load(config.SAVE_PREPROCESSED) 
         X_tr     = npz["X_train"]
         X_te     = npz["X_test"]
         y_tr_01  = npz["y_train"]
         train_ids = npz["train_ids"]
         test_ids  = npz["test_ids"]
         print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
-        print(f"[Shapes] X_tr={X_tr.shape}, X_te={X_te.shape}, y={y_tr_01.shape}")
 
+    print(f"[Preprocessing] {time.time() - t_preprocess:.1f}s")
     return X_tr, X_te, y_tr_01, train_ids, test_ids
 
 
 def tune_hyperparameter(X_tr, y_tr_01, folds):
+    t_tune = time.time()
+
     if config.DO_TUNE:       
         #Random search over log-uniform grid ( better for computationnal cost )
         LAMBDA_LOW, LAMBDA_HIGH = 1e-6, 1e-2
@@ -146,11 +151,14 @@ def tune_hyperparameter(X_tr, y_tr_01, folds):
         print(f"[Loaded] Best params from -> {config.SAVE_BEST}")
         print(f"[BEST] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
           f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
-        
+    
+    print(f"[Hyperparameter Tuning] {time.time() - t_tune:.1f}s")
     return best_lambda, best_gamma, best_thr
 
 
 def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
+    t_final = time.time()
+
     w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
     w_final, final_loss = implementations.reg_logistic_regression(
         y_tr_01, X_tr, best_lambda, w0, max_iters=config.FINAL_MAX_ITERS, gamma=best_gamma
@@ -160,6 +168,7 @@ def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
     np.save(config.SAVE_WEIGHTS, w_final)
     print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
 
+    print(f"[Final Training] {time.time() - t_final:.1f}s")
     return w_final
 
 
@@ -187,7 +196,6 @@ def main():
     best_lambda, best_gamma, best_thr = tune_hyperparameter(X_tr, y_tr_01, folds)
 
 
-    # == Final training 
     if config.DO_SUBMISSION:
         w_final = train_final_model(X_tr, y_tr_01, best_lambda, best_gamma)
         make_submission(X_te, w_final, best_thr, test_ids)
@@ -196,6 +204,6 @@ def main():
         #probs_va_final = implementations.sigmoid(X_tr[va_idx].dot(w_final))
         #evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va_final, best_thr)
 
-        print(f"Done in {time.time() - t0:.1f}s.")
+        print(f"[TOTAL] {time.time() - t0:.1f}s.")
 if __name__ == "__main__":
     main()

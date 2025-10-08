@@ -2,6 +2,7 @@
 import numpy as np
 import config
 
+
 def _drop_constant_and_naonly(X):
     """Return indices of non-constant and non-NA-only columns."""
     cols = []
@@ -15,6 +16,7 @@ def _drop_constant_and_naonly(X):
             continue
         cols.append(j)
     return np.array(cols, dtype=int)
+
 
 # def variance_filter(X, cols, min_var=0.0):
 #     if min_var <= 0:
