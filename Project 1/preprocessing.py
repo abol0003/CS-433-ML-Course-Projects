@@ -3,11 +3,24 @@ import numpy as np
 import config
 
 
-def _drop_constant_and_naonly(X):
+def mean_impute(Xtr, Xte):
+    """
+    Replace NaN values in Xtr and Xte with the mean of each column (0 if all NaN in a column, based on Xtr).
+    """
+    col_mean = np.nanmean(Xtr, axis=0)
+    col_mean = np.where(np.isnan(col_mean), 0.0, col_mean)
+    nan_idx_tr = np.where(np.isnan(Xtr))
+    nan_idx_te = np.where(np.isnan(Xte))
+    Xtr[nan_idx_tr] = np.take(col_mean, nan_idx_tr[1])
+    Xte[nan_idx_te] = np.take(col_mean, nan_idx_te[1])
+    return Xtr, Xte
+
+
+def filter_constant_and_nan_columns(Xtr, Xte):
     """Return indices of non-constant and non-NA-only columns."""
     cols = []
-    for j in range(X.shape[1]):
-        col = X[:, j]
+    for j in range(Xtr.shape[1]):
+        col = Xtr[:, j]
         valid = ~np.isnan(col)
         if not np.any(valid):
             continue
@@ -15,25 +28,46 @@ def _drop_constant_and_naonly(X):
         if np.all(vals == vals[0]):
             continue
         cols.append(j)
-    return np.array(cols, dtype=int)
+    col_keep = np.array(cols, dtype=int)
+    return Xtr[:, col_keep], Xte[:, col_keep] 
 
 
-# def variance_filter(X, cols, min_var=0.0):
-#     if min_var <= 0:
-#         return cols
-#     keep = []
-#     for j in cols:
-#         v = np.nanvar(X[:, j])
-#         if v >= min_var:
-#             keep.append(j)
-#     return np.array(keep, dtype=int)
+def one_hot_encoding(Xtr, Xte): # Does it really do something ???? 
+                                # Why don't we OneHotEncode all columns that meets the requirements => require to check how complete them (to avoid too many new columns -- why would it undesired?)
+                                # OR use randomness to choose which columns we choose to OneHotEncode 
+                                # OR Check the nature of the feature directly (hand-picking -- might be the most efficient ?)  
+    """
+    Performs limited one-hot encoding on low-cardinality columns (=have a small number of different possible values) of the input feature matrices (Xtr, Xte).
 
+    For each column in Xtr and Xte:
+        - If the column has a small number of unique values (as defined by config.LOW_CARD_MAX_UNIQUE),
+        and the total number of new columns does not exceed config.MAX_ADDED_ONEHOT,
+        create new binary columns for each unique value (except the last one).
+        - Each new column indicates whether the original value matches a specific category.
+        - Columns with too many unique values or exceeding the cap are left unchanged.
 
-def one_hot_encoding(Xtr, Xte, max_unique=10, per_feat_cap=8, global_cap=120):
+    Args:
+        Xtr : array-like, shape (n_samples_train, n_features)
+            Training feature matrix.
+        Xte : array-like, shape (n_samples_test, n_features)
+            Test feature matrix.
+
+    Returns:
+        Xtr_new : ndarray
+            Transformed training matrix with one-hot encoded columns added.
+        Xte_new : ndarray
+            Transformed test matrix with one-hot encoded columns added.
+        keep_idx : list of int
+            Indices of columns that were kept in their original form.
+        used_idx : list of int
+            Indices of columns that were one-hot encoded.
+        plan : list of tuples
+            Encoding plan, each tuple contains (column index, values encoded).
+    """
     Xtr = np.asarray(Xtr)
     Xte = np.asarray(Xte)
     n_tr, d = Xtr.shape
-    assert Xte.shape[1] == d
+    assert Xte.shape[1] == d # sanity check
 
     new_tr_cols, new_te_cols = [], []
     used_idx = []
@@ -46,10 +80,10 @@ def one_hot_encoding(Xtr, Xte, max_unique=10, per_feat_cap=8, global_cap=120):
         if not np.any(valid):
             continue
         uniq = np.unique(col_tr[valid])
-        if uniq.shape[0] <= max_unique:
-            uniq_capped = uniq[:min(len(uniq), per_feat_cap)]
+        if uniq.shape[0] <= config.LOW_CARD_MAX_UNIQUE:
+            uniq_capped = uniq[:min(len(uniq), config.ONEHOT_PER_FEAT_MAX)]
             k_add = max(len(uniq_capped) - 1, 0)
-            if added + k_add > global_cap:
+            if added + k_add > config.MAX_ADDED_ONEHOT:
                 continue
             values_to_encode = uniq_capped[:-1]
             if values_to_encode.size > 0:
@@ -69,17 +103,32 @@ def one_hot_encoding(Xtr, Xte, max_unique=10, per_feat_cap=8, global_cap=120):
     else:
         Xtr_new, Xte_new = Xtr_keep, Xte_keep
 
-    return Xtr_new, Xte_new, keep_idx, used_idx, plan
+    
+    print(f"[Preprocess] one-hot: kept {len(keep_idx)} raw cols, "
+        f"encoded {len(used_idx)} cols, plan size={sum(len(v) for _, v in plan)}")
+
+    return Xtr_new, Xte_new
+ 
+ 
+def standardize(Xtr_new, Xte_new):
+    mean_tr = np.mean(Xtr_new, axis=0).astype(np.float32) 
+    std_tr  = np.std(Xtr_new, axis=0).astype(np.float32)
+    std_tr  = np.where(std_tr == 0, 1.0, std_tr) # avoid division by 0 -- safe guard as we already removed constant columns
+    Xtr_s = (Xtr_new - mean_tr) / std_tr
+    Xte_s = (Xte_new - mean_tr) / std_tr # can't use test stats to standardize! 
+    return Xtr_s, Xte_s
 
 
-def preprocess(x_train, x_test, printable=True):
-    """Preprocess train/test sets, return processed matrices."""
+def preprocess(x_train, x_test):
+    """
+    Preprocess train/test sets, return processed matrices.
+    """
     Xtr = np.array(x_train, dtype=np.float32, copy=True)
     Xte = np.array(x_test,  dtype=np.float32, copy=True)
 
     n_tr, d = Xtr.shape
-    if printable:
-        print(f"[Preprocess] n_train={n_tr}, n_test={Xte.shape[0]}, n_features={d}")
+   
+    print(f"[Preprocess] n_train={n_tr}, n_test={Xte.shape[0]}, n_features={d}")
 
     # Mean imputation: replace NaN by mean of the column (0 if all NaN)
     col_mean = np.nanmean(Xtr, axis=0)
@@ -89,36 +138,24 @@ def preprocess(x_train, x_test, printable=True):
     Xtr[inds_tr] = np.take(col_mean, inds_tr[1])
     Xte[inds_te] = np.take(col_mean, inds_te[1])
 
-    # Remove constant / NaN-only columns 
-    col_keep = _drop_constant_and_naonly(Xtr)
-    #col_keep = variance_filter(Xtr, col_keep)
-    Xtr = Xtr[:, col_keep]
-    Xte = Xte[:, col_keep]
+    # Remove constant and NaN-only columns 
+    Xtr, Xte = filter_constant_and_nan_columns(Xtr)
 
-    if printable:
-        print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
+    
+    print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
 
-    # Light one-hot 
-    Xtr_new, Xte_new, keep_idx, used_idx, plan = one_hot_encoding(Xtr, Xte,
-    max_unique = config.LOW_CARD_MAX_UNIQUE,
-    per_feat_cap = config.ONEHOT_PER_FEAT_MAX,
-    global_cap = config.MAX_ADDED_ONEHOT)
-    if printable:
-        print(f"[Preprocess] one-hot: kept {len(keep_idx)} raw cols, "
-          f"encoded {len(used_idx)} cols, plan size={sum(len(v) for _, v in plan)}")
+    # Light one-hot encoding
+    Xtr, Xte = one_hot_encoding(Xtr, Xte)
+        
     # Standardization
-    mean_tr = np.mean(Xtr_new, axis=0).astype(np.float32)
-    std_tr  = np.std(Xtr_new, axis=0).astype(np.float32)
-    std_tr  = np.where(std_tr == 0, 1.0, std_tr)
-    Xtr_s = (Xtr_new - mean_tr) / std_tr
-    Xte_s = (Xte_new - mean_tr) / std_tr
+    Xtr, Xte = standardize(Xtr, Xte)
 
     # Bias term for w_0
-    Xtr_f = np.hstack([np.ones((Xtr_s.shape[0], 1), dtype=np.float32), Xtr_s])
-    Xte_f = np.hstack([np.ones((Xte_s.shape[0], 1), dtype=np.float32), Xte_s])
+    Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
+    Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
 
-    if printable:
-        print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
+
+    print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
 
     return Xtr_f, Xte_f
 

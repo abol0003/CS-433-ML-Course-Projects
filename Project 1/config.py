@@ -34,7 +34,7 @@ THRESHOLDS = [0.50, 0.55]#, 0.60, 0.65, 0.70, 0.75]
 #[BEST] lambda=1.500e-03, gamma=1.520e-03, thr=0.53, ACC=0.8586, P=0.3203, R=0.5355, F1=0.4008 
     #0.383	0.902
 
-# Light one-hot
-LOW_CARD_MAX_UNIQUE = 10
-ONEHOT_PER_FEAT_MAX = 8
-MAX_ADDED_ONEHOT    = 120
+# Light One-hot Encoding 
+LOW_CARD_MAX_UNIQUE = 10    # Decides if a column should be encoded
+ONEHOT_PER_FEAT_MAX = 8     
+MAX_ADDED_ONEHOT    = 120   # Limits the total number of new columns added by encoding

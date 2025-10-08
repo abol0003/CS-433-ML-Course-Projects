@@ -75,7 +75,7 @@ def preprocess_data():
     if config.DO_PREPROCESS:
         x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
 
-        X_tr, X_te = preprocessing.preprocess(x_train, x_test, True)
+        X_tr, X_te = preprocessing.preprocess(x_train, x_test)
         
         # is it really necessary ? 
         # can't we not just do that to predictions ({-1, +1} to {0, 1})
