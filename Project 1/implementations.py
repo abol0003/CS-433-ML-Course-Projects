@@ -98,7 +98,7 @@ def logistic_gradient(y, tx, w, lambda_=0):
     return grad
 
 
-## Additional function needed taken from lab 2#####
+## Additional function needed taken from lab 2
 
 
 def compute_loss(y, tx, w):

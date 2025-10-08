@@ -94,6 +94,7 @@ def preprocess(x_train, x_test, printable=True):
     #col_keep = variance_filter(Xtr, col_keep)
     Xtr = Xtr[:, col_keep]
     Xte = Xte[:, col_keep]
+
     if printable:
         print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
 
@@ -120,3 +121,7 @@ def preprocess(x_train, x_test, printable=True):
         print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
 
     return Xtr_f, Xte_f
+
+
+def preprocess2():
+    return

@@ -48,6 +48,23 @@ def stratified_kfold_indices(y01, n_splits=5, seed=42): # %val=1/n_splits
 #     return (lam, gam, best_thr, acc, best_prec, best_rec, best_f1)
 
 
+def best_threshold_by_f1(y_true01, scores):
+    y = np.asarray(y_true01)
+    s = np.asarray(scores)
+    order = np.argsort(-s)
+    y = y[order]; s_sorted = s[order]
+    P = np.sum(y == 1)
+    #vectorized computation of precision/recall/f1
+    tps = np.cumsum(y == 1)
+    fps = np.cumsum(y == 0)
+    precision = tps / (tps + fps + 1e-12)
+    recall    = tps / (P + 1e-12)
+    f1        = 2 * precision * recall / (precision + recall + 1e-12)
+    k = int(np.argmax(f1))
+    best_thr = s_sorted[k]               
+    return float(best_thr), float(precision[k]), float(recall[k]), float(f1[k])
+
+
 def cv_train_and_eval(args):
     y_tr_01, X_tr, folds, lam, gam, max_iters = args
     #cross-validation with best threshold found on each fold
@@ -78,18 +95,3 @@ def cv_train_and_eval(args):
             float(np.mean(rec_list)), float(np.mean(f1_list)))
 
 
-def best_threshold_by_f1(y_true01, scores):
-    y = np.asarray(y_true01)
-    s = np.asarray(scores)
-    order = np.argsort(-s)
-    y = y[order]; s_sorted = s[order]
-    P = np.sum(y == 1)
-    #vectorized computation of precision/recall/f1
-    tps = np.cumsum(y == 1)
-    fps = np.cumsum(y == 0)
-    precision = tps / (tps + fps + 1e-12)
-    recall    = tps / (P + 1e-12)
-    f1        = 2 * precision * recall / (precision + recall + 1e-12)
-    k = int(np.argmax(f1))
-    best_thr = s_sorted[k]               
-    return float(best_thr), float(precision[k]), float(recall[k]), float(f1[k])

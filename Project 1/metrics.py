@@ -2,7 +2,7 @@
 import numpy as np
 
 
-def to01_labels(y_pm1):
+def to_01_labels(y_pm1):
     return (y_pm1 > 0).astype(np.uint8)
 
 

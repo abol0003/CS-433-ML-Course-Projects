@@ -78,8 +78,8 @@ def preprocess_data():
         X_tr, X_te = preprocessing.preprocess(x_train, x_test, True)
         
         # is it really necessary ? 
-        # can't we not just do that to predictions {-1, +1} to {0, 1}
-        y_tr_01 = metrics.to01_labels(y_train_pm1) 
+        # can't we not just do that to predictions ({-1, +1} to {0, 1})
+        y_tr_01 = metrics.to_01_labels(y_train_pm1) 
 
         np.savez_compressed(
             config.SAVE_PREPROCESSED,
