@@ -16,6 +16,61 @@ def mean_impute(Xtr, Xte):
     return Xtr, Xte
 
 
+def smart_impute(Xtr, Xte):
+    """
+    Smart imputation based on feature distribution characteristics (check viz in viz_eda.ipynb). 
+    Uses median for skewed distributions, mean for normal, and mode for discrete/categorical.
+    
+    Args:
+        Xtr: Training data array
+        Xte: Test data array
+    
+    Returns:
+        Xtr, Xte: Imputed arrays
+    """
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    
+    for j in range(Xtr.shape[1]):
+        col = Xtr[:, j]
+        valid_mask = ~np.isnan(col) # boolean array
+        
+        if not np.any(valid_mask):
+            # All NaNs, fill with 0
+            fill_value = 0.0
+        else:
+            valid_vals = col[valid_mask] #
+            n_unique = len(np.unique(valid_vals))
+            
+            # Check if discrete/categorical (few unique values)
+            # Maybe there are discrete features with over 10 values... (Need to check that)
+            if n_unique <= 10:
+                # Use mode (most frequent value)
+                unique, counts = np.unique(valid_vals, return_counts=True)
+                fill_value = unique[np.argmax(counts)] # select most frequent value
+            else:
+                # Check skewness for continuous features
+                mean_val = np.mean(valid_vals)
+                median_val = np.median(valid_vals)
+                
+                # If mean and median differ significantly, distribution is skewed
+                if abs(mean_val - median_val) > 0.5 * np.std(valid_vals):
+                    # Use median for skewed distributions
+                    fill_value = median_val
+                else:
+                    # Use mean for approximately normal distributions
+                    fill_value = mean_val
+        
+        # Apply imputation
+        nan_idx_tr = np.isnan(Xtr[:, j])
+        nan_idx_te = np.isnan(Xte[:, j])
+        Xtr[nan_idx_tr, j] = fill_value
+        Xte[nan_idx_te, j] = fill_value
+    
+    return Xtr, Xte
+
+#==========================================
+
 def filter_constant_and_nan_columns(Xtr, Xte):
     """Return indices of non-constant and non-NA-only columns."""
     cols = []
@@ -123,7 +178,7 @@ def preprocess(x_train, x_test):
     """
     Preprocess train/test sets, return processed matrices.
     """
-    Xtr = np.array(x_train, dtype=np.float32, copy=True)
+    Xtr = np.array(x_train, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
     Xte = np.array(x_test,  dtype=np.float32, copy=True)
 
     n_tr, d = Xtr.shape
@@ -140,7 +195,6 @@ def preprocess(x_train, x_test):
 
     # Remove constant and NaN-only columns 
     Xtr, Xte = filter_constant_and_nan_columns(Xtr)
-
     
     print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
 
@@ -154,7 +208,6 @@ def preprocess(x_train, x_test):
     Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
     Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
 
-
     print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
 
     return Xtr_f, Xte_f
@@ -162,3 +215,10 @@ def preprocess(x_train, x_test):
 
 def preprocess2():
     return
+
+
+
+
+
+
+

@@ -23,31 +23,6 @@ def stratified_kfold_indices(y01, n_splits=5, seed=42): # %val=1/n_splits
     return folds
 
 
-# def cv_train_and_eval(args):
-#     y_tr_01, X_tr, folds, lam, gam, max_iters = args
-
-#     all_va_idx = []
-#     all_probs  = []
-
-#     for (tr_idx, va_idx) in folds:
-#         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-#         w, _ = impl.reg_logistic_regression(
-#             y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam
-#         )
-#         probs_va = impl.sigmoid(X_tr[va_idx].dot(w))
-#         all_va_idx.append(va_idx)
-#         all_probs.append(probs_va)
-
-#     va_idx_concat = np.concatenate(all_va_idx)
-#     probs_concat  = np.concatenate(all_probs)
-#     y_val_concat  = y_tr_01[va_idx_concat]
-
-#     best_thr, best_prec, best_rec, best_f1 = best_threshold_by_f1(y_val_concat, probs_concat)
-#     acc = accuracy_score(y_val_concat, (probs_concat >= best_thr).astype(int))
-
-#     return (lam, gam, best_thr, acc, best_prec, best_rec, best_f1)
-
-
 def best_threshold_by_f1(y_true01, scores):
     y = np.asarray(y_true01)
     s = np.asarray(scores)
@@ -93,5 +68,6 @@ def cv_train_and_eval(args):
 
     return (lam, gam, float(best_thr), float(np.mean(acc_list)), float(np.mean(prec_list)),
             float(np.mean(rec_list)), float(np.mean(f1_list)))
+
 
 

@@ -10,6 +10,7 @@ ROC_FIG      = os.path.join(PICT_DIR, "roc_curve.png")
 PR_FIG       = os.path.join(PICT_DIR, "pr_curve.png")
 
 SAVE_DIR = "data_saving"
+RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
 SAVE_PREPROCESSED = os.path.join(SAVE_DIR, "preprocessed_data.npz")
 SAVE_BEST         = os.path.join(SAVE_DIR, "best_params.npz")
 SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
