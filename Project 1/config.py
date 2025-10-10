@@ -16,8 +16,8 @@ SAVE_BEST         = os.path.join(SAVE_DIR, "best_params.npz")
 SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
 
 # Pipeline 
-DO_PREPROCESS = False    # reuse preprocessed npz if False
-DO_TUNE       = False    # tune or load best params
+DO_PREPROCESS = True    # reuse preprocessed npz if False
+DO_TUNE       = True    # tune or load best params
 DO_SUBMISSION = True     # when True: train final model, save weights, build submission & plots
 
 RNG_SEED = 42

@@ -194,7 +194,7 @@ def preprocess(x_train, x_test):
     Xte[inds_te] = np.take(col_mean, inds_te[1])
 
     # Remove constant and NaN-only columns 
-    Xtr, Xte = filter_constant_and_nan_columns(Xtr)
+    Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)
     
     print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
 
