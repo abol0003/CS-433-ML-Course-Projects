@@ -1,0 +1,43 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Data files
+*.csv
+*.npz
+*.npy
+*.pkl
+*.h5
+*.hdf5
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Model weights and checkpoints
+*.pth
+*.ckpt
+*.weights
+
+# Except sample submissions (if needed)
+!sample-submission.csv
+!**/sample_submission.csv
