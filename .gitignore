@@ -41,3 +41,6 @@ ENV/
 # Except sample submissions (if needed)
 !sample-submission.csv
 !**/sample_submission.csv
+Project 1/imp2.py
+Project 1/run2.py
+.gitignore
