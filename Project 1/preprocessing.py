@@ -4,6 +4,7 @@ import config
 
 
 def remove_low_validity_features(Xtr, Xte, threshold=0.05):
+    # Shoudld we remove even more ???
     """
     Remove features with less than a specified percentage of valid (non-NaN) data.
     
@@ -237,6 +238,107 @@ def variance_treshold(Xtr, Xte, threshold=0.01): #DANGER: This step must be befo
  #==========================================
 
 
+def correlation(Xtr, Xte, y_train, x_train_raw, threshold=0.90):
+    """
+    Correlation-based feature selection to remove highly correlated features.
+    For each pair of features with correlation >= threshold, keeps the one that:
+    1) Has higher correlation with target (y_train)
+    2) If tied, has less missing data (from x_train_raw)
+    3) If still tied, has higher variance
+    
+    Args:
+        Xtr: Training data array (already preprocessed/imputed)
+        Xte: Test data array (already preprocessed/imputed)
+        y_train: Target labels for training data
+        x_train_raw: Raw training data before imputation (for missing data calculation)
+                     If None, skips missing data criterion
+        threshold: Correlation threshold for considering features as highly correlated (default: 0.90)
+    
+    Returns:
+        Xtr_new, Xte_new: Arrays with highly correlated features removed
+    """
+   
+    
+
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    
+    n_features = Xtr.shape[1]
+    
+    # Compute correlation matrix for features
+    corr_matrix = np.corrcoef(Xtr, rowvar=False)
+    
+    # Compute correlation with target
+    target_corr = np.zeros(n_features)
+    for j in range(n_features):
+        target_corr[j] = abs(np.corrcoef(Xtr[:, j], y_train)[0, 1])
+    
+    # Compute missing data ratios (if raw data provided)
+    if x_train_raw is not None:
+        missing_ratios = np.zeros(n_features)
+        for j in range(n_features):
+            if j < x_train_raw.shape[1]:  # Check bounds in case dimensions changed
+                missing_ratios[j] = np.sum(np.isnan(x_train_raw[:, j])) / x_train_raw.shape[0]
+    else:
+        missing_ratios = None
+    
+    # Compute variances
+    variances = np.var(Xtr, axis=0)
+    
+    # Find highly correlated pairs
+    features_to_remove = set()
+    
+    for i in range(n_features):
+        if i in features_to_remove:
+            continue
+            
+        for j in range(i + 1, n_features):
+            if j in features_to_remove:
+                continue
+            
+            # Check if correlation is above threshold
+            if abs(corr_matrix[i, j]) >= threshold:
+                # Decide which feature to remove
+                # Criterion 1: Higher correlation with target
+                if target_corr[i] > target_corr[j]:
+                    features_to_remove.add(j)
+                elif target_corr[j] > target_corr[i]:
+                    features_to_remove.add(i)
+                else:
+                    # Tied on target correlation
+                    # Criterion 2: Less missing data
+                    if missing_ratios is not None and i < len(missing_ratios) and j < len(missing_ratios):
+                        if missing_ratios[i] < missing_ratios[j]:
+                            features_to_remove.add(j)
+                        elif missing_ratios[j] < missing_ratios[i]:
+                            features_to_remove.add(i)
+                        else:
+                            # Still tied, use variance
+                            # Criterion 3: Higher variance
+                            if variances[i] > variances[j]:
+                                features_to_remove.add(j)
+                            else:
+                                features_to_remove.add(i)
+                    else:
+                        # No missing data info, use variance directly
+                        # Criterion 3: Higher variance
+                        if variances[i] > variances[j]:
+                            features_to_remove.add(j)
+                        else:
+                            features_to_remove.add(i)
+    
+    # Keep features not in removal set
+    features_to_keep = [i for i in range(n_features) if i not in features_to_remove]
+    
+    print(f"[Preprocess] correlation-based selection: removed {len(features_to_remove)} features "
+          f"(threshold: {threshold}), kept {len(features_to_keep)}/{n_features} cols")
+    
+    return Xtr[:, features_to_keep], Xte[:, features_to_keep]
+
+
+ #==========================================
+
+
 def standardize(Xtr_new, Xte_new):
     mean_tr = np.mean(Xtr_new, axis=0).astype(np.float32) 
     std_tr  = np.std(Xtr_new, axis=0).astype(np.float32)
@@ -253,20 +355,11 @@ def preprocess(x_train, x_test):
     """
     Preprocess train/test sets, return processed matrices.
     """
-    Xtr = np.array(x_train, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
-    Xte = np.array(x_test,  dtype=np.float32, copy=True)
-
-    n_tr, d = Xtr.shape
+    Xtr_raw = np.array(x_train, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
+    Xte_raw = np.array(x_test,  dtype=np.float32, copy=True)
    
-    print(f"[Preprocess] n_train={n_tr}, n_test={Xte.shape[0]}, n_features={d}")
 
-    # Mean imputation: replace NaN by mean of the column (0 if all NaN)
-    col_mean = np.nanmean(Xtr, axis=0)
-    col_mean = np.where(np.isnan(col_mean), 0.0, col_mean)
-    inds_tr = np.where(np.isnan(Xtr))
-    inds_te = np.where(np.isnan(Xte))
-    Xtr[inds_tr] = np.take(col_mean, inds_tr[1])
-    Xte[inds_te] = np.take(col_mean, inds_te[1])
+    Xtr, Xte = mean_impute(Xtr_raw, Xte_raw)
 
     # Remove constant and NaN-only columns 
     Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)

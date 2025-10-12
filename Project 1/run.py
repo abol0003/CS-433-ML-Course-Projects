@@ -77,8 +77,8 @@ def preprocess_data():
 
         X_tr, X_te = preprocessing.preprocess(x_train, x_test)
         
-        # is it really necessary ? 
-        # can't we not just do that to predictions ({-1, +1} to {0, 1})
+        
+        # func in implementations.py assumes y takes {0,1} !
         y_tr_01 = metrics.to_01_labels(y_train_pm1) 
 
         np.savez_compressed(
@@ -183,6 +183,7 @@ def make_submission(X_te, w_final, best_thr, test_ids):
 
 def main():
     t0 = time.time()
+     
 
     print("Loading data from:", config.DATA_DIR)
     X_tr, X_te, y_tr_01, train_ids, test_ids = preprocess_data()
