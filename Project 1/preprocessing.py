@@ -238,7 +238,7 @@ def variance_treshold(Xtr, Xte, threshold=0.01): #DANGER: This step must be befo
  #==========================================
 
 
-def correlation(Xtr, Xte, y_train, x_train_raw, threshold=0.90):
+def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=0.90):
     """
     Correlation-based feature selection to remove highly correlated features.
     For each pair of features with correlation >= threshold, keeps the one that:
@@ -258,8 +258,6 @@ def correlation(Xtr, Xte, y_train, x_train_raw, threshold=0.90):
         Xtr_new, Xte_new: Arrays with highly correlated features removed
     """
    
-    
-
     Xtr = np.array(Xtr, dtype=np.float32, copy=True)
     Xte = np.array(Xte, dtype=np.float32, copy=True)
     
@@ -349,22 +347,22 @@ def standardize(Xtr_new, Xte_new):
 
 
 #==========================================
+#==========================================
 
 
-def preprocess(x_train, x_test):
+def preprocess(Xtr_raw, Xte_raw):
     """
     Preprocess train/test sets, return processed matrices.
     """
-    Xtr_raw = np.array(x_train, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
-    Xte_raw = np.array(x_test,  dtype=np.float32, copy=True)
+    Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
+    Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
    
 
     Xtr, Xte = mean_impute(Xtr_raw, Xte_raw)
 
-    # Remove constant and NaN-only columns 
     Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)
     
-    print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
+    #print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
 
     # Light one-hot encoding
     Xtr, Xte = one_hot_encoding(Xtr, Xte)
