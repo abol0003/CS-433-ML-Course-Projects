@@ -36,7 +36,7 @@ def remove_low_validity_features(Xtr, Xte, threshold=0.05):
     return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
 
 
-def mean_impute(Xtr, Xte):
+def mean_impute(Xtr, Xte): ## DANGER: has to be the fist step in preproc pipeline if use of CAT, DISC, CONT
     """
     Replace NaN values in Xtr and Xte with the mean of each column (0 if all NaN in a column, based on Xtr).
     """
@@ -102,7 +102,9 @@ def smart_impute(Xtr, Xte):
     
     return Xtr, Xte
 
+
 #==========================================
+
 
 def filter_constant_and_nan_columns(Xtr, Xte):
     """Return indices of non-constant and non-NA-only columns."""
@@ -118,6 +120,7 @@ def filter_constant_and_nan_columns(Xtr, Xte):
         cols.append(j)
     col_keep = np.array(cols, dtype=int)
     return Xtr[:, col_keep], Xte[:, col_keep] 
+
 
 
 
@@ -204,6 +207,33 @@ def one_hot_encoding(Xtr, Xte): # Does it really do something ????
     return Xtr_new, Xte_new
  
  
+#==========================================
+
+
+def variance_treshold(Xtr, Xte, threshold=0.01): #DANGER: This step must be before standardize ! caveat: for continuous feature, variance can be much higher.. 
+    #for on-hoz encoded features: variance is always <= 0.25
+    """
+    Remove features (columns) with variance below the given threshold.
+    Assumes missing values have already been imputed.
+
+    Args:
+        Xtr: Training data array 
+        Xte: Test data array 
+        threshold: Minimum variance required to keep a feature (default: 0.01)
+
+    Returns:
+        Xtr_new, Xte_new: Arrays with low-variance features removed
+    """
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    variances = np.var(Xtr, axis=0)
+    cols_to_keep = np.where(variances >= threshold)[0]
+
+    print(f"[Preprocess] variance threshold: kept {len(cols_to_keep)}/{Xtr.shape[1]} cols (threshold: {threshold})")
+
+    return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
+
+
  #==========================================
 
 
