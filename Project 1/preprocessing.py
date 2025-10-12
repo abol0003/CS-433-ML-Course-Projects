@@ -3,6 +3,39 @@ import numpy as np
 import config
 
 
+def remove_low_validity_features(Xtr, Xte, threshold=0.05):
+    """
+    Remove features with less than a specified percentage of valid (non-NaN) data.
+    
+    Args:
+        Xtr: Training data array
+        Xte: Test data array
+        threshold: Minimum percentage of valid data required to keep a feature (default: 0.05 = 5%)
+    
+    Returns:
+        Xtr, Xte: Filtered arrays with only features that have sufficient valid data
+    """
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    
+    n_samples = Xtr.shape[0]
+    cols_to_keep = []
+    
+    for j in range(Xtr.shape[1]):
+        col = Xtr[:, j]
+        valid_count = np.sum(~np.isnan(col))
+        valid_ratio = valid_count / n_samples
+        
+        if valid_ratio > threshold:
+            cols_to_keep.append(j)
+    
+    cols_to_keep = np.array(cols_to_keep, dtype=int)
+    
+    print(f"[Preprocess] remove low-validity features: kept {len(cols_to_keep)}/{Xtr.shape[1]} cols (threshold: {threshold*100:.1f}% valid data)")
+    
+    return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
+
+
 def mean_impute(Xtr, Xte):
     """
     Replace NaN values in Xtr and Xte with the mean of each column (0 if all NaN in a column, based on Xtr).
@@ -87,6 +120,12 @@ def filter_constant_and_nan_columns(Xtr, Xte):
     return Xtr[:, col_keep], Xte[:, col_keep] 
 
 
+
+
+
+#==========================================
+
+
 def one_hot_encoding(Xtr, Xte): # Does it really do something ???? 
                                 # Why don't we OneHotEncode all columns that meets the requirements => require to check how complete them (to avoid too many new columns -- why would it undesired?)
                                 # OR use randomness to choose which columns we choose to OneHotEncode 
@@ -165,6 +204,9 @@ def one_hot_encoding(Xtr, Xte): # Does it really do something ????
     return Xtr_new, Xte_new
  
  
+ #==========================================
+
+
 def standardize(Xtr_new, Xte_new):
     mean_tr = np.mean(Xtr_new, axis=0).astype(np.float32) 
     std_tr  = np.std(Xtr_new, axis=0).astype(np.float32)
@@ -172,6 +214,9 @@ def standardize(Xtr_new, Xte_new):
     Xtr_s = (Xtr_new - mean_tr) / std_tr
     Xte_s = (Xte_new - mean_tr) / std_tr # can't use test stats to standardize! 
     return Xtr_s, Xte_s
+
+
+#==========================================
 
 
 def preprocess(x_train, x_test):
@@ -214,6 +259,7 @@ def preprocess(x_train, x_test):
 
 
 def preprocess2():
+
     return
 
 

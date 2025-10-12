@@ -39,3 +39,8 @@ THRESHOLDS = [0.50, 0.55]#, 0.60, 0.65, 0.70, 0.75]
 LOW_CARD_MAX_UNIQUE = 10    # Decides if a column should be encoded
 ONEHOT_PER_FEAT_MAX = 8     
 MAX_ADDED_ONEHOT    = 120   # Limits the total number of new columns added by encoding
+
+# Nature of the features
+CAT = [1, 2,  ]      # categorical feature indices
+DISC = [5, 8, 15, 22]     # discrete feature indices
+CONT = [0, 1, 2, 4, 6]    # continuous feature indices
