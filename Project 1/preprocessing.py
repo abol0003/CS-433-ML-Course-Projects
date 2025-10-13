@@ -232,7 +232,7 @@ def variance_treshold(Xtr, Xte, threshold=0.01): #DANGER: This step must be befo
     return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
 
 
-def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=0.90):
+def remove_highly_correlated_features(Xtr, Xte, y_train, threshold=0.90):
     """
     Correlation-based feature selection to remove highly correlated features.
     For each pair of features with correlation >= threshold, keeps the one that:
@@ -244,8 +244,6 @@ def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=
         Xtr: Training data array (already preprocessed/imputed)
         Xte: Test data array (already preprocessed/imputed)
         y_train: Target labels for training data
-        x_train_raw: Raw training data before imputation (for missing data calculation)
-                     If None, skips missing data criterion
         threshold: Correlation threshold for considering features as highly correlated (default: 0.90)
     
     Returns:
@@ -265,16 +263,7 @@ def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=
     for j in range(n_features):
         target_corr[j] = abs(np.corrcoef(Xtr[:, j], y_train)[0, 1])
     
-    # Compute missing data (NaN) ratios 
-    if x_train_raw:
-        missing_ratios = np.zeros(n_features)
-        for j in range(n_features):
-            if j < x_train_raw.shape[1]:  # Check bounds in case dimensions changed
-                missing_ratios[j] = np.sum(np.isnan(x_train_raw[:, j])) / x_train_raw.shape[0]
-    else:
-        missing_ratios = None
-    
-    # Compute variances
+    # Variances
     variances = np.var(Xtr, axis=0)
     
     # Find highly correlated pairs
@@ -288,7 +277,6 @@ def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=
             if j in features_to_remove:
                 continue
             
-            # Check if correlation is above threshold
             if abs(corr_matrix[i, j]) >= threshold:
                 # Decide which feature to remove
                 # Criterion 1: Higher correlation with target
@@ -297,34 +285,17 @@ def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=
                 elif target_corr[j] > target_corr[i]:
                     features_to_remove.add(i)
                 else:
-                    # Tied on target correlation
-                    # Criterion 2: Less missing data
-                    if missing_ratios is not None and i < len(missing_ratios) and j < len(missing_ratios):
-                        if missing_ratios[i] < missing_ratios[j]:
-                            features_to_remove.add(j)
-                        elif missing_ratios[j] < missing_ratios[i]:
-                            features_to_remove.add(i)
-                        else:
-                            # Still tied, use variance
-                            # Criterion 3: Higher variance
-                            if variances[i] > variances[j]:
-                                features_to_remove.add(j)
-                            else:
-                                features_to_remove.add(i)
+                    # Criterion 2: Higher variance
+                    if variances[i] > variances[j]:
+                        features_to_remove.add(j)
                     else:
-                        # No missing data info, use variance directly
-                        # Criterion 3: Higher variance
-                        if variances[i] > variances[j]:
-                            features_to_remove.add(j)
-                        else:
-                            features_to_remove.add(i)
+                        features_to_remove.add(i)
     
-    # Keep features not in removal set
     features_to_keep = [i for i in range(n_features) if i not in features_to_remove]
     
     print(f"[Preprocess] correlation-based selection: removed {len(features_to_remove)} features "
           f"(threshold: {threshold}), kept {len(features_to_keep)}/{n_features} cols")
-    
+
     return Xtr[:, features_to_keep], Xte[:, features_to_keep]
 
 
@@ -395,13 +366,13 @@ def preprocess2(Xtr_raw, Xte_raw, ytr_pm1, train_ids, test_ids, filename):
 
     Xtr, Xte = variance_treshold(Xtr, Xte)
 
-    Xtr, Xte = remove_highly_correlated_features(Xtr, Xte)
+    Xtr, Xte = remove_highly_correlated_features(Xtr, Xte, ytr_pm1)
     
     Xtr, Xte = one_hot_encoding(Xtr, Xte)
         
     Xtr, Xte = standardize(Xtr, Xte)
 
-    Xtr, Xte = pca(Xtr, Xte)
+    #Xtr, Xte = pca(Xtr, Xte)
 
     # Bias term for w_0
     Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
