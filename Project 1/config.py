@@ -9,16 +9,18 @@ CONF_MAT_FIG = os.path.join(PICT_DIR, "confusion_matrix.png")
 ROC_FIG      = os.path.join(PICT_DIR, "roc_curve.png")
 PR_FIG       = os.path.join(PICT_DIR, "pr_curve.png")
 
+# Paths 
 SAVE_DIR = "data_saving"
 RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
-SAVE_PREPROCESSED = os.path.join(SAVE_DIR, "preprocessed_data.npz")
+PREPROC1_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_1.npz")
+PREPROC2_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
 SAVE_BEST         = os.path.join(SAVE_DIR, "best_params.npz")
 SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
 
 # Pipeline 
-DO_PREPROCESS = True    # reuse preprocessed npz if False
-DO_TUNE       = True    # tune or load best params
-DO_SUBMISSION = True     # when True: train final model, save weights, build submission & plots
+PREPROCESSING = True    # reuse preprocessed npz if False
+DO_TUNE       = True    # tune or load best params #HYPERPARAM_TUNING
+DO_SUBMISSION = True     # when True: train final model, save weights, build submission & plots #SUBMISSIOn
 
 RNG_SEED = 42
 

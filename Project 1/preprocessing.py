@@ -1,6 +1,7 @@
 # Preprocessing functions
 import numpy as np
 import config
+import metrics
 
 
 def remove_low_validity_features(Xtr, Xte, threshold=0.05):
@@ -35,6 +36,9 @@ def remove_low_validity_features(Xtr, Xte, threshold=0.05):
     print(f"[Preprocess] remove low-validity features: kept {len(cols_to_keep)}/{Xtr.shape[1]} cols (threshold: {threshold*100:.1f}% valid data)")
     
     return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
+
+
+#==========================================
 
 
 def mean_impute(Xtr, Xte): ## DANGER: has to be the fist step in preproc pipeline if use of CAT, DISC, CONT
@@ -121,13 +125,6 @@ def filter_constant_and_nan_columns(Xtr, Xte):
         cols.append(j)
     col_keep = np.array(cols, dtype=int)
     return Xtr[:, col_keep], Xte[:, col_keep] 
-
-
-
-
-
-
-#==========================================
 
 
 def one_hot_encoding(Xtr, Xte): # Does it really do something ???? 
@@ -235,9 +232,6 @@ def variance_treshold(Xtr, Xte, threshold=0.01): #DANGER: This step must be befo
     return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
 
 
- #==========================================
-
-
 def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=0.90):
     """
     Correlation-based feature selection to remove highly correlated features.
@@ -263,16 +257,16 @@ def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=
     
     n_features = Xtr.shape[1]
     
-    # Compute correlation matrix for features
+    # Correlation matrix 
     corr_matrix = np.corrcoef(Xtr, rowvar=False)
     
-    # Compute correlation with target
+    # Correlation with target
     target_corr = np.zeros(n_features)
     for j in range(n_features):
         target_corr[j] = abs(np.corrcoef(Xtr[:, j], y_train)[0, 1])
     
-    # Compute missing data ratios (if raw data provided)
-    if x_train_raw is not None:
+    # Compute missing data (NaN) ratios 
+    if x_train_raw:
         missing_ratios = np.zeros(n_features)
         for j in range(n_features):
             if j < x_train_raw.shape[1]:  # Check bounds in case dimensions changed
@@ -288,7 +282,7 @@ def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=
     
     for i in range(n_features):
         if i in features_to_remove:
-            continue
+            continue # skips the rest of current loop
             
         for j in range(i + 1, n_features):
             if j in features_to_remove:
@@ -334,7 +328,7 @@ def remove_highly_correlated_features(Xtr, Xte, y_train, x_train_raw, threshold=
     return Xtr[:, features_to_keep], Xte[:, features_to_keep]
 
 
- #==========================================
+#==========================================
 
 
 def standardize(Xtr_new, Xte_new):
@@ -347,10 +341,19 @@ def standardize(Xtr_new, Xte_new):
 
 
 #==========================================
+
+
+def pca():
+    return
+
+
+
+
+#==========================================
 #==========================================
 
 
-def preprocess(Xtr_raw, Xte_raw):
+def preprocess1(Xtr_raw, Xte_raw):
     """
     Preprocess train/test sets, return processed matrices.
     """
@@ -376,16 +379,58 @@ def preprocess(Xtr_raw, Xte_raw):
 
     print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
 
+    # func in implementations.py assumes y takes {0,1} !
+    y_tr_01 = metrics.to_01_labels(y_train_pm1) 
+
     return Xtr_f, Xte_f
 
 
-def preprocess2():
+def preprocess2(Xtr_raw, Xte_raw, ytr_pm1, train_ids, test_ids, filename):
+    Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
+    Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
 
-    return
+    Xtr, Xte = remove_low_validity_features(Xtr_raw, Xte_raw)
+
+    Xtr, Xte = smart_impute(Xtr, Xte)
+
+    Xtr, Xte = variance_treshold(Xtr, Xte)
+
+    Xtr, Xte = remove_highly_correlated_features(Xtr, Xte)
+    
+    Xtr, Xte = one_hot_encoding(Xtr, Xte)
+        
+    Xtr, Xte = standardize(Xtr, Xte)
+
+    Xtr, Xte = pca(Xtr, Xte)
+
+    # Bias term for w_0
+    Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
+    Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
+
+    print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
+
+    # func in implementations.py assumes y takes {0,1} !
+    ytr_01 = metrics.to_01_labels(ytr_pm1) 
+
+    save(Xtr_f, Xte_f, ytr_01, train_ids, test_ids, filename)
+
+    return Xtr_f, Xte_f, ytr_01
 
 
+#==========================================
+#==========================================
 
 
+def save(Xtr, Xte, ytr, train_ids, test_ids, filename):
+    np.savez_compressed(
+        filename,
+        X_train   = Xtr, 
+        X_test    = Xte, 
+        y_train   = ytr,
+        train_ids = train_ids, 
+        test_ids  = test_ids
+    )
+    print(f"[Saved] Preprocessed data -> {config.SAVE_PREPROCESSED}")
 
 
 
