@@ -324,65 +324,71 @@ def pca():
 #==========================================
 
 
-def preprocess1(Xtr_raw, Xte_raw):
-    """
-    Preprocess train/test sets, return processed matrices.
-    """
-    Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
-    Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
+# def preprocess1(Xtr_raw, Xte_raw):
+#     """
+#     Preprocess train/test sets, return processed matrices.
+#     """
+#     Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
+#     Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
    
 
-    Xtr, Xte = mean_impute(Xtr_raw, Xte_raw)
+#     Xtr, Xte = mean_impute(Xtr_raw, Xte_raw)
 
-    Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)
+#     Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)
     
-    #print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
+#     #print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
 
-    # Light one-hot encoding
-    Xtr, Xte = one_hot_encoding(Xtr, Xte)
+#     # Light one-hot encoding
+#     Xtr, Xte = one_hot_encoding(Xtr, Xte)
         
-    # Standardization
-    Xtr, Xte = standardize(Xtr, Xte)
+#     # Standardization
+#     Xtr, Xte = standardize(Xtr, Xte)
 
-    # Bias term for w_0
-    Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
-    Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
+#     # Bias term for w_0
+#     Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
+#     Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
 
-    print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
+#     print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
 
-    # func in implementations.py assumes y takes {0,1} !
-    y_tr_01 = metrics.to_01_labels(y_train_pm1) 
+#     # func in implementations.py assumes y takes {0,1} !
+#     y_tr_01 = metrics.to_01_labels(y_train_pm1) 
 
-    return Xtr_f, Xte_f
+#     return Xtr_f, Xte_f
 
 
 def preprocess2(Xtr_raw, Xte_raw, ytr_pm1, train_ids, test_ids, filename):
     Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
     Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
 
+    print("[Preprocess] Step 1: Removing low-validity features...")
     Xtr, Xte = remove_low_validity_features(Xtr_raw, Xte_raw)
 
+    print("[Preprocess] Step 2: Imputing missing values (smart)...")
     Xtr, Xte = smart_impute(Xtr, Xte)
 
+    print("[Preprocess] Step 3: Removing low-variance features...")
     Xtr, Xte = variance_treshold(Xtr, Xte)
 
+    print("[Preprocess] Step 4: Removing highly correlated features...")
     Xtr, Xte = remove_highly_correlated_features(Xtr, Xte, ytr_pm1)
     
+    print("[Preprocess] Step 5: One-hot encoding categorical features...")
     Xtr, Xte = one_hot_encoding(Xtr, Xte)
-        
+
+    print("[Preprocess] Step 6: Standardizing features...")    
     Xtr, Xte = standardize(Xtr, Xte)
 
     #Xtr, Xte = pca(Xtr, Xte)
 
-    # Bias term for w_0
+    print("[Preprocess] Step 7: Adding bias term...")
     Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
     Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
 
     print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
 
-    # func in implementations.py assumes y takes {0,1} !
     ytr_01 = metrics.to_01_labels(ytr_pm1) 
 
+    print(f"[Preprocess] Saving preprocessed data to {filename} ...")
     save(Xtr_f, Xte_f, ytr_01, train_ids, test_ids, filename)
 
     return Xtr_f, Xte_f, ytr_01
@@ -401,7 +407,6 @@ def save(Xtr, Xte, ytr, train_ids, test_ids, filename):
         train_ids = train_ids, 
         test_ids  = test_ids
     )
-    print(f"[Saved] Preprocessed data -> {config.SAVE_PREPROCESSED}")
 
 
 

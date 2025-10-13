@@ -1,6 +1,7 @@
 # all configuration variables and constants
 import os 
 
+#====================================================
 DATA_DIR = r"./data/dataset/"
 OUTPUT_PRED = "submission_best.csv"
 
@@ -17,6 +18,7 @@ PREPROC2_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
 SAVE_BEST         = os.path.join(SAVE_DIR, "best_params.npz")
 SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
 
+#====================================================
 # Pipeline 
 PREPROCESSING = True    # reuse preprocessed npz if False
 DO_TUNE       = True    # tune or load best params #HYPERPARAM_TUNING
@@ -24,6 +26,7 @@ DO_SUBMISSION = True     # when True: train final model, save weights, build sub
 
 RNG_SEED = 42
 
+#====================================================
 # Tuning parameters 
 HOLDOUT_VAL_FRAC = 0.20
 TUNING_MAX_ITERS = 400
@@ -37,12 +40,14 @@ THRESHOLDS = [0.50, 0.55]#, 0.60, 0.65, 0.70, 0.75]
 #[BEST] lambda=1.500e-03, gamma=1.520e-03, thr=0.53, ACC=0.8586, P=0.3203, R=0.5355, F1=0.4008 
     #0.383	0.902
 
+#====================================================
 # Light One-hot Encoding 
 LOW_CARD_MAX_UNIQUE = 10    # Decides if a column should be encoded
 ONEHOT_PER_FEAT_MAX = 8     
 MAX_ADDED_ONEHOT    = 120   # Limits the total number of new columns added by encoding
 
-# Nature of the features
+#====================================================
+# Nature of the features (Preproc)
 CAT = [1, 2,  ]      # categorical feature indices
 DISC = [5, 8, 15, 22]     # discrete feature indices
 CONT = [0, 1, 2, 4, 6]    # continuous feature indices

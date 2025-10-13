@@ -208,7 +208,8 @@ def make_submission(X_te, w_final, best_thr, test_ids):
 
 def main():
 
-    if config.PREPROCESS:
+    t = time.time()
+    if config.PREPROCESSING:
         x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
         X_tr, X_te, ytr_01 = preprocessing.preprocess2(x_train, x_test, y_train_pm1, train_ids, test_ids, config.PREPROC2_DATA_PATH)
     else:
@@ -221,6 +222,7 @@ def main():
         train_ids = npz["train_ids"]
         test_ids  = npz["test_ids"]
         print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
+    print(f"[Preprocessing] {time.time() - t:.1f}s")
 
     #if config.DO_TUNE:
 
