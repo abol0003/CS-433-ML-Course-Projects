@@ -20,9 +20,9 @@ SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
 
 #====================================================
 # Pipeline 
-PREPROCESSING = True    # reuse preprocessed npz if False
-DO_TUNE       = True    # tune or load best params #HYPERPARAM_TUNING
-DO_SUBMISSION = True     # when True: train final model, save weights, build submission & plots #SUBMISSIOn
+PREPROCESSING     = True    # reuse preprocessed npz if False
+HYPERPARAM_TUNING = True    # tune or load best params 
+SUBMISSION        = True    # Train final model, Save weights, Submission file
 
 RNG_SEED = 42
 
