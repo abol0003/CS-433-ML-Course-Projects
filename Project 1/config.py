@@ -20,15 +20,12 @@ SAVE_WEIGHTS      = os.path.join(SAVE_DIR, "final_weights.npy")
 
 #====================================================
 # Pipeline 
-<<<<<<< HEAD
 DO_PREPROCESS = False    # reuse preprocessed npz if False
 DO_TUNE       = True    # tune or load best params
 DO_SUBMISSION = True     # when True: train final model, save weights, build submission & plots
-=======
 PREPROCESSING     = True    # reuse preprocessed npz if False
 HYPERPARAM_TUNING = True    # tune or load best params 
 SUBMISSION        = True    # Train final model, Save weights, Submission file
->>>>>>> 0bdceae75a3d21b7bdd0957ca9bccc5962d6ff3a
 
 RNG_SEED = 42
 
@@ -42,7 +39,6 @@ GAMMA_HIGH = 1
 LAMBDA_LOW = 1e-10
 LAMBDA_HIGH = 1e-1
 
-<<<<<<< HEAD
 N_TRIALS = 15  # Number of trials for hyperparameter tuning
 """
 
@@ -55,9 +51,7 @@ N_TRIALS = 15  # Number of trials for hyperparameter tuning
 # #[BEST] lambda=1.500e-03, gamma=1.520e-03, thr=0.53, ACC=0.8586, P=0.3203, R=0.5355, F1=0.4008 
 #     #0.383	0.902
 """
-=======
 #====================================================
->>>>>>> 0bdceae75a3d21b7bdd0957ca9bccc5962d6ff3a
 # Light One-hot Encoding 
 LOW_CARD_MAX_UNIQUE = 10    # Decides if a column should be encoded
 ONEHOT_PER_FEAT_MAX = 8     
