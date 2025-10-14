@@ -1,9 +1,47 @@
 # Preprocessing functions
 import numpy as np
 import config
+import metrics
 
 
-def mean_impute(Xtr, Xte):
+def remove_low_validity_features(Xtr, Xte, threshold=0.05):
+    # Shoudld we remove even more ???
+    """
+    Remove features with less than a specified percentage of valid (non-NaN) data.
+    
+    Args:
+        Xtr: Training data array
+        Xte: Test data array
+        threshold: Minimum percentage of valid data required to keep a feature (default: 0.05 = 5%)
+    
+    Returns:
+        Xtr, Xte: Filtered arrays with only features that have sufficient valid data
+    """
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    
+    n_samples = Xtr.shape[0]
+    cols_to_keep = []
+    
+    for j in range(Xtr.shape[1]):
+        col = Xtr[:, j]
+        valid_count = np.sum(~np.isnan(col))
+        valid_ratio = valid_count / n_samples
+        
+        if valid_ratio > threshold:
+            cols_to_keep.append(j)
+    
+    cols_to_keep = np.array(cols_to_keep, dtype=int)
+    
+    print(f"[Preprocess] remove low-validity features: kept {len(cols_to_keep)}/{Xtr.shape[1]} cols (threshold: {threshold*100:.1f}% valid data)")
+    
+    return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
+
+
+#==========================================
+
+
+def mean_impute(Xtr, Xte): ## DANGER: has to be the fist step in preproc pipeline if use of CAT, DISC, CONT
     """
     Replace NaN values in Xtr and Xte with the mean of each column (0 if all NaN in a column, based on Xtr).
     """
@@ -69,7 +107,9 @@ def smart_impute(Xtr, Xte):
     
     return Xtr, Xte
 
+
 #==========================================
+
 
 def filter_constant_and_nan_columns(Xtr, Xte):
     """Return indices of non-constant and non-NA-only columns."""
@@ -165,6 +205,103 @@ def one_hot_encoding(Xtr, Xte): # Does it really do something ????
     return Xtr_new, Xte_new
  
  
+#==========================================
+
+
+def variance_treshold(Xtr, Xte, threshold=0.01): #DANGER: This step must be before standardize ! caveat: for continuous feature, variance can be much higher.. 
+    #for on-hoz encoded features: variance is always <= 0.25
+    """
+    Remove features (columns) with variance below the given threshold.
+    Assumes missing values have already been imputed.
+
+    Args:
+        Xtr: Training data array 
+        Xte: Test data array 
+        threshold: Minimum variance required to keep a feature (default: 0.01)
+
+    Returns:
+        Xtr_new, Xte_new: Arrays with low-variance features removed
+    """
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    variances = np.var(Xtr, axis=0)
+    cols_to_keep = np.where(variances >= threshold)[0]
+
+    print(f"[Preprocess] variance threshold: kept {len(cols_to_keep)}/{Xtr.shape[1]} cols (threshold: {threshold})")
+
+    return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
+
+
+def remove_highly_correlated_features(Xtr, Xte, y_train, threshold=0.90):
+    """
+    Correlation-based feature selection to remove highly correlated features.
+    For each pair of features with correlation >= threshold, keeps the one that:
+    1) Has higher correlation with target (y_train)
+    2) If tied, has less missing data (from x_train_raw)
+    3) If still tied, has higher variance
+    
+    Args:
+        Xtr: Training data array (already preprocessed/imputed)
+        Xte: Test data array (already preprocessed/imputed)
+        y_train: Target labels for training data
+        threshold: Correlation threshold for considering features as highly correlated (default: 0.90)
+    
+    Returns:
+        Xtr_new, Xte_new: Arrays with highly correlated features removed
+    """
+   
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    
+    n_features = Xtr.shape[1]
+    
+    # Correlation matrix 
+    corr_matrix = np.corrcoef(Xtr, rowvar=False)
+    
+    # Correlation with target
+    target_corr = np.zeros(n_features)
+    for j in range(n_features):
+        target_corr[j] = abs(np.corrcoef(Xtr[:, j], y_train)[0, 1])
+    
+    # Variances
+    variances = np.var(Xtr, axis=0)
+    
+    # Find highly correlated pairs
+    features_to_remove = set()
+    
+    for i in range(n_features):
+        if i in features_to_remove:
+            continue # skips the rest of current loop
+            
+        for j in range(i + 1, n_features):
+            if j in features_to_remove:
+                continue
+            
+            if abs(corr_matrix[i, j]) >= threshold:
+                # Decide which feature to remove
+                # Criterion 1: Higher correlation with target
+                if target_corr[i] > target_corr[j]:
+                    features_to_remove.add(j)
+                elif target_corr[j] > target_corr[i]:
+                    features_to_remove.add(i)
+                else:
+                    # Criterion 2: Higher variance
+                    if variances[i] > variances[j]:
+                        features_to_remove.add(j)
+                    else:
+                        features_to_remove.add(i)
+    
+    features_to_keep = [i for i in range(n_features) if i not in features_to_remove]
+    
+    print(f"[Preprocess] correlation-based selection: removed {len(features_to_remove)} features "
+          f"(threshold: {threshold}), kept {len(features_to_keep)}/{n_features} cols")
+
+    return Xtr[:, features_to_keep], Xte[:, features_to_keep]
+
+
+#==========================================
+
+
 def standardize(Xtr_new, Xte_new):
     mean_tr = np.mean(Xtr_new, axis=0).astype(np.float32) 
     std_tr  = np.std(Xtr_new, axis=0).astype(np.float32)
@@ -174,51 +311,102 @@ def standardize(Xtr_new, Xte_new):
     return Xtr_s, Xte_s
 
 
-def preprocess(x_train, x_test):
-    """
-    Preprocess train/test sets, return processed matrices.
-    """
-    Xtr = np.array(x_train, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
-    Xte = np.array(x_test,  dtype=np.float32, copy=True)
-
-    n_tr, d = Xtr.shape
-   
-    print(f"[Preprocess] n_train={n_tr}, n_test={Xte.shape[0]}, n_features={d}")
-
-    # Mean imputation: replace NaN by mean of the column (0 if all NaN)
-    col_mean = np.nanmean(Xtr, axis=0)
-    col_mean = np.where(np.isnan(col_mean), 0.0, col_mean)
-    inds_tr = np.where(np.isnan(Xtr))
-    inds_te = np.where(np.isnan(Xte))
-    Xtr[inds_tr] = np.take(col_mean, inds_tr[1])
-    Xte[inds_te] = np.take(col_mean, inds_te[1])
-
-    # Remove constant and NaN-only columns 
-    Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)
-    
-    print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
-
-    # Light one-hot encoding
-    Xtr, Xte = one_hot_encoding(Xtr, Xte)
-        
-    # Standardization
-    Xtr, Xte = standardize(Xtr, Xte)
-
-    # Bias term for w_0
-    Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
-    Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
-
-    print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
-
-    return Xtr_f, Xte_f
+#==========================================
 
 
-def preprocess2():
+def pca():
     return
 
 
 
 
+#==========================================
+#==========================================
+
+
+# def preprocess1(Xtr_raw, Xte_raw):
+#     """
+#     Preprocess train/test sets, return processed matrices.
+#     """
+#     Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
+#     Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
+   
+
+#     Xtr, Xte = mean_impute(Xtr_raw, Xte_raw)
+
+#     Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)
+    
+#     #print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
+
+#     # Light one-hot encoding
+#     Xtr, Xte = one_hot_encoding(Xtr, Xte)
+        
+#     # Standardization
+#     Xtr, Xte = standardize(Xtr, Xte)
+
+#     # Bias term for w_0
+#     Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
+#     Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
+
+#     print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
+
+#     # func in implementations.py assumes y takes {0,1} !
+#     y_tr_01 = metrics.to_01_labels(y_train_pm1) 
+
+#     return Xtr_f, Xte_f
+
+
+def preprocess2(Xtr_raw, Xte_raw, ytr_pm1, train_ids, test_ids, filename):
+    Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
+    Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
+
+    print("[Preprocess] Step 1: Removing low-validity features...")
+    Xtr, Xte = remove_low_validity_features(Xtr_raw, Xte_raw)
+
+    print("[Preprocess] Step 2: Imputing missing values (smart)...")
+    Xtr, Xte = smart_impute(Xtr, Xte)
+
+    print("[Preprocess] Step 3: Removing low-variance features...")
+    Xtr, Xte = variance_treshold(Xtr, Xte)
+
+    print("[Preprocess] Step 4: Removing highly correlated features...")
+    Xtr, Xte = remove_highly_correlated_features(Xtr, Xte, ytr_pm1)
+    
+    print("[Preprocess] Step 5: One-hot encoding categorical features...")
+    Xtr, Xte = one_hot_encoding(Xtr, Xte)
+
+    print("[Preprocess] Step 6: Standardizing features...")    
+    Xtr, Xte = standardize(Xtr, Xte)
+
+    #Xtr, Xte = pca(Xtr, Xte)
+
+    print("[Preprocess] Step 7: Adding bias term...")
+    Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
+    Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
+
+    print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
+
+    ytr_01 = metrics.to_01_labels(ytr_pm1) 
+
+    print(f"[Preprocess] Saving preprocessed data to {filename} ...")
+    save(Xtr_f, Xte_f, ytr_01, train_ids, test_ids, filename)
+
+    return Xtr_f, Xte_f, ytr_01
+
+
+#==========================================
+#==========================================
+
+
+def save(Xtr, Xte, ytr, train_ids, test_ids, filename):
+    np.savez_compressed(
+        filename,
+        X_train   = Xtr, 
+        X_test    = Xte, 
+        y_train   = ytr,
+        train_ids = train_ids, 
+        test_ids  = test_ids
+    )
 
 
 

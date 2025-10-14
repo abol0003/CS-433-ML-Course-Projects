@@ -69,7 +69,7 @@ def sample_loguniform(low, high, size, rng=np.random.RandomState(config.RNG_SEED
     return np.exp(rng.uniform(lo, hi, size))
 
 
-def preprocess_data():
+def preprocess_data(): # TO SUPPRESS 
     t_preprocess = time.time()
 
     if config.DO_PREPROCESS:
@@ -77,8 +77,8 @@ def preprocess_data():
 
         X_tr, X_te = preprocessing.preprocess(x_train, x_test)
         
-        # is it really necessary ? 
-        # can't we not just do that to predictions ({-1, +1} to {0, 1})
+        
+        # func in implementations.py assumes y takes {0,1} !
         y_tr_01 = metrics.to_01_labels(y_train_pm1) 
 
         np.savez_compressed(
@@ -181,31 +181,52 @@ def make_submission(X_te, w_final, best_thr, test_ids):
     print(f"[Submission] saved -> {config.OUTPUT_PRED}")
    
 
+# def main():
+#     t0 = time.time()
+     
+#     print("Loading data from:", config.DATA_DIR)
+#     X_tr, X_te, y_tr_01, train_ids, test_ids = preprocess_data()
+
+#     N_SPLITS = 5      
+
+#     folds = cv_utils.stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
+
+#     _, va_idx= folds[0]  #for final eval only
+
+#     best_lambda, best_gamma, best_thr = tune_hyperparameter(X_tr, y_tr_01, folds)
+
+#     if config.DO_SUBMISSION:
+#         w_final = train_final_model(X_tr, y_tr_01, best_lambda, best_gamma)
+#         make_submission(X_te, w_final, best_thr, test_ids)
+
+#         # validation metrics & plots using the final model
+#         # probs_va_final = implementations.sigmoid(X_tr[va_idx].dot(w_final))
+#         # evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va_final, best_thr)
+
+#         print(f"[TOTAL] {time.time() - t0:.1f}s.")
+
+
 def main():
-    t0 = time.time()
 
-    print("Loading data from:", config.DATA_DIR)
-    X_tr, X_te, y_tr_01, train_ids, test_ids = preprocess_data()
+    t = time.time()
+    if config.PREPROCESSING:
+        x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
+        X_tr, X_te, ytr_01 = preprocessing.preprocess2(x_train, x_test, y_train_pm1, train_ids, test_ids, config.PREPROC2_DATA_PATH)
+    else:
+        if not os.path.exists(config.SAVE_PREPROCESSED):
+            raise FileNotFoundError(f"{config.SAVE_PREPROCESSED} not found.")
+        npz = np.load(config.SAVE_PREPROCESSED) 
+        Xtr      = npz["X_train"]
+        Xte      = npz["X_test"]
+        ytr_01   = npz["y_train"]
+        train_ids = npz["train_ids"]
+        test_ids  = npz["test_ids"]
+        print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
+    print(f"[Preprocessing] {time.time() - t:.1f}s")
 
-    #tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
-       
-    N_SPLITS = 5      
+    #if config.DO_TUNE:
 
-    folds = cv_utils.stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
-
-    _, va_idx= folds[0]  #for final eval only
-
-    best_lambda, best_gamma, best_thr = tune_hyperparameter(X_tr, y_tr_01, folds)
-
-    if config.DO_SUBMISSION:
-        w_final = train_final_model(X_tr, y_tr_01, best_lambda, best_gamma)
-        make_submission(X_te, w_final, best_thr, test_ids)
-
-        # validation metrics & plots using the final model
-        # probs_va_final = implementations.sigmoid(X_tr[va_idx].dot(w_final))
-        # evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va_final, best_thr)
-
-        print(f"[TOTAL] {time.time() - t0:.1f}s.")
+    #if config.DO_SUBMISSION:
 
 
 if __name__ == "__main__":
