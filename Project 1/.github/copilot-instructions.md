@@ -1,50 +1,46 @@
 # Copilot Instructions for Project 1
 
-## Project Overview
-This is a machine learning project for CS-433, focused on training and evaluating models using provided datasets. The main workflow involves data preprocessing, model implementation, and running experiments via `run.py`.
+Purpose: Help AI agents work productively in this ML repo (CS‑433 Project 1) by documenting the actual architecture, workflows, and conventions in code.
 
-## Key Files & Structure
-- `run.py` / `run2.py`: Main entry points for running experiments and generating submissions.
-- `implementations.py`: Contains all required ML functions with specific signatures. This is the core logic file.
-- `helpers.py`: Utility functions for data handling and preprocessing.
-- `data/`: Contains training and test datasets (`x_train.csv`, `y_train.csv`, `x_test.csv`).
-- `data_saving/`: Stores intermediate results, model weights, and parameters.
-- `grading_tests/`: Contains public test scripts and environment setup (`environment.yml`).
+## Big picture
+- Task: binary classification with linear models (GD/SGD MSE, Least Squares, Ridge, Logistic, Regularized Logistic) trained on local CSVs.
+- Pipeline (in `run.py`):
+  1) Load CSVs via `helpers.load_csv_data` (ID in first column; labels are −1/+1)
+  2) `preprocessing.preprocess`: mean-impute (by TRAIN), drop constant/NA-only cols, light one‑hot (capped), standardize (by TRAIN), prepend bias 1.
+  3) Tune λ, γ with stratified k‑fold CV; pick global threshold maximizing F1 from concatenated fold probabilities.
+  4) Train final reg-logistic on full train; save weights, build submission, save plots.
 
-## Developer Workflows
-- **Testing:**
-  - Use the public tests in `grading_tests/test_project1_public.py`.
-  - Run tests with: `pytest --github_link <GITHUB-REPO-URL> .` (or use a local directory for faster iteration).
-  - Do NOT copy test files into your main repo; always run from the course repo.
-- **Environment:**
-  - Create grading environment: `conda env create --file=grading_tests/environment.yml --name=project1-grading`.
-  - Activate: `conda activate project1-grading`.
-- **Formatting:**
-  - Use `black` for code formatting: `black <SOURCE-DIRECTORY>`.
+## Key files
+- `run.py`: Primary entrypoint; uses only local numpy/matplotlib. Controls caching to `data_saving/` and outputs to `picture/`.
+- `run2.py`: Alternate runner with similar pipeline and knobs (Adam/early stop flags) — use only if compatible with current `implementations.py`.
+- `implementations.py`: Required functions and signatures used by grading tests: `mean_squared_error_gd`, `mean_squared_error_sgd`, `least_squares`, `ridge_regression(y, tx, lambda_)`, `logistic_regression`, `reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma, ...)`, plus helpers like `sigmoid`, `logistic_loss`, `logistic_gradient`.
+- `cv_utils.py`: Stratified splits and CV loop (`cv_train_and_eval`) selecting F1‑optimal threshold.
+- `preprocessing.py`: Imputation, feature filtering, capped one‑hot (see constants), standardization, bias column.
+- `metrics.py`, `plots.py`, `helpers.py`: Metrics/label conversion, plotting, CSV IO.
 
-## Project-Specific Patterns
-- All main ML functions must be implemented in `implementations.py` with the requested signatures.
-- Submission files should be generated as CSVs (see `submission_best.csv` and `data/sample-submission.csv`).
-- Intermediate results and model parameters are saved in `data_saving/` as `.npz` or `.npy` files.
-- Avoid hardcoding paths; use relative paths for portability.
+## Conventions and gotchas
+- Labels: helpers returns y in {−1,+1}; convert to {0,1} early via `metrics.to_01_labels`. Keep types consistent end‑to‑end.
+- Preprocessing caps (from `config.py`): `LOW_CARD_MAX_UNIQUE`, `ONEHOT_PER_FEAT_MAX`, `MAX_ADDED_ONEHOT`. Do not exceed caps; they keep dims small.
+- Paths: use `config.py` constants (`DATA_DIR`, `SAVE_*`, `PICT_DIR`). All IO is relative; avoid hard‑coded absolute paths.
+- Caching: `data_saving/preprocessed_data.npz`, `best_params.npz`, `final_weights.npy` are reused based on `config.DO_*` toggles.
+- Windows: multiprocessing uses `spawn`; `run.py` sets `matplotlib.use("Agg")` for headless plot saving.
+- API stability: Do not change function names/signatures in `implementations.py` (grading depends on them). If you add optional kwargs, keep backward‑compat.
+- Packages: stick to `grading_tests/environment.yml` (numpy/matplotlib/etc.); no sklearn for training logic.
 
-## Integration Points
-- No external web APIs; all data is local.
-- Use only packages listed in `grading_tests/environment.yml`.
-- Results and plots (e.g., confusion matrix, ROC curve) are saved in `picture/`.
+## Workflows
+- Environment
+  - Create: `conda env create --file=grading_tests/environment.yml --name=project1-grading`
+  - Activate: `conda activate project1-grading`
+- Run public tests (from the course repo):
+  - `pytest --github_link <GITHUB-REPO-URL> grading_tests/`
+- Run pipeline:
+  - Adjust toggles in `config.py` (`DO_PREPROCESS`, `DO_TUNE`, `DO_SUBMISSION`, seeds, iter budgets).
+  - Place CSVs under `data/dataset/` (with ID in col 0).
+  - `python run.py` produces `submission_best.csv`, caches to `data_saving/`, and figures under `picture/`.
+- Formatting: use `black` on source files.
 
-## Conventions
-- Keep all required function signatures in `implementations.py`.
-- Main script should be `run.py` (or `run.ipynb` if using notebooks).
-- Do not modify test files or grading scripts.
-- Check for updates to public tests before final submission.
+## Examples (repo‑specific)
+- CV thresholding: see `cv_utils.best_threshold_by_f1` and its use in `cv_train_and_eval` (global threshold over concatenated folds).
+- Preprocess shape logging and caps: see `preprocessing.preprocess` prints and one‑hot caps from `config.py`.
 
-## Example: Running Tests Locally
-```sh
-conda env create --file=grading_tests/environment.yml --name=project1-grading
-conda activate project1-grading
-pytest --github_link <GITHUB-REPO-URL> grading_tests/
-```
-
----
-For questions about grading or environment setup, refer to `grading_tests/INSTRUCTIONS.md`.
+Questions or unclear bits? Ping to refine these instructions (e.g., if you plan to extend `implementations.reg_logistic_regression` with Adam/early‑stop while keeping signatures stable).

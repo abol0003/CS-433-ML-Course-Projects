@@ -108,16 +108,14 @@ def tune_hyperparameter(X_tr, y_tr_01, folds):
 
     if config.DO_TUNE:       
         #Random search over log-uniform grid ( better for computationnal cost )
-        LAMBDA_LOW, LAMBDA_HIGH = 1e-6, 1e-2
-        GAMMA_LOW,  GAMMA_HIGH  = 1e-3, 9e-1
-        N_TRIALS = 30   
-        lambda_samples = sample_loguniform(LAMBDA_LOW, LAMBDA_HIGH, N_TRIALS)
-        gamma_samples  = sample_loguniform(GAMMA_LOW,  GAMMA_HIGH,  N_TRIALS)
+
+        lambda_samples = sample_loguniform(config.LAMBDA_LOW, config.LAMBDA_HIGH, config.N_TRIALS)
+        gamma_samples  = sample_loguniform(config.GAMMA_LOW,  config.GAMMA_HIGH,  config.N_TRIALS)
 
         tasks = [(y_tr_01, X_tr, folds, lam, gam, config.TUNING_MAX_ITERS)
                 for lam, gam in zip(lambda_samples, gamma_samples)]
 
-        nproc = max(1, (os.cpu_count() or 2) - 1)
+        nproc = max(1, (os.cpu_count() or 2) - 4)
         with mp.get_context("spawn").Pool(processes=nproc) as pool:
             results = pool.map(cv_utils.cv_train_and_eval, tasks)
 
