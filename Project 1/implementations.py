@@ -255,14 +255,14 @@ def adam_logistic(
     if loss_type == "weighted_bce":
         if alpha_pos is None or alpha_neg is None:
             alpha_pos, alpha_neg = class_weights(y)
-        def loss_fn(y_, tx_, w_):
+        def loss_function(y_, tx_, w_):
             return weighted_logistic_loss(y_, tx_, w_, alpha_pos, alpha_neg, lambda_)
-        def grad_fn(y_, tx_, w_):
+        def gradient_function(y_, tx_, w_):
             return weighted_logistic_gradient(y_, tx_, w_, alpha_pos, alpha_neg, lambda_)
     elif loss_type == "focal":
-        def loss_fn(y_, tx_, w_):
+        def loss_function(y_, tx_, w_):
             return focal_logistic_loss(y_, tx_, w_, focal_alpha, focal_gamma, lambda_)
-        def grad_fn(y_, tx_, w_):
+        def gradient_function(y_, tx_, w_):
             return focal_logistic_gradient(y_, tx_, w_, focal_alpha, focal_gamma, lambda_)
     else:
         raise ValueError("loss_type must be 'weighted_bce' or 'focal'")
@@ -288,7 +288,7 @@ def adam_logistic(
         y_b, tx_b = next_batch()
 
         # Generating gradient vector
-        g = grad_fn(y_b, tx_b, w)
+        g = gradient_function(y_b, tx_b, w)
 
         # Increasing time step
         t += 1
@@ -305,5 +305,5 @@ def adam_logistic(
         w -= gamma * mhat / (np.sqrt(vhat) + eps)
 
     # Computing loss value
-    loss = logistic_loss(y, tx, w, lambda_ = 0.0)
+    loss = loss_function(y, tx, w)
     return w, loss
