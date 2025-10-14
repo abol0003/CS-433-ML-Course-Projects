@@ -107,7 +107,7 @@ def tune_hyperparameter(X_tr, y_tr_01, folds):
     t_tune = time.time()
 
     if config.DO_TUNE:       
-        #Random search over log-uniform grid ( better for computationnal cost )
+        # Random search over log-uniform grid ( better for computational cost )
         LAMBDA_LOW, LAMBDA_HIGH = 1e-6, 1e-2
         GAMMA_LOW,  GAMMA_HIGH  = 1e-3, 9e-1
         N_TRIALS = 30   
@@ -160,15 +160,24 @@ def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
     t_final = time.time()
 
     w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-    w_final, final_loss = implementations.reg_logistic_regression(
-        y_tr_01, X_tr, best_lambda, w0, max_iters=config.FINAL_MAX_ITERS, gamma=best_gamma
-    )
-    print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
 
+    w_final, final_loss = implementations.adam_logistic(
+        y_tr_01, X_tr, w0,
+        max_iters=config.FINAL_MAX_ITERS,
+        gamma=best_gamma, lambda_=best_lambda,
+        loss_type="weighted_bce",    # or "focal"
+        alpha_pos=None, alpha_neg=None,   # auto-balance
+        focal_alpha=0.5, focal_gamma=2.0, # used if focal
+        batch_size=None, seed=config.RNG_SEED
+    )
+
+    print(f"[Final] loss (unpenalized BCE) = {final_loss:.6f}")
     np.save(config.SAVE_WEIGHTS, w_final)
+
     print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
 
     print(f"[Final Training] {time.time() - t_final:.1f}s")
+
     return w_final
 
 
@@ -189,7 +198,7 @@ def main():
     X_tr, X_te, y_tr_01, train_ids, test_ids = preprocess_data()
 
     #tr_idx, va_idx = split_train_val_stratified(y_tr_01, val_fraction=HOLDOUT_VAL_FRAC, seed=RNG_SEED)
-       
+
     N_SPLITS = 5      
 
     folds = cv_utils.stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
