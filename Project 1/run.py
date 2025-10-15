@@ -15,6 +15,7 @@ import preprocessing
 import metrics 
 import plots
 import cv_utils
+import tuning
 
 os.makedirs(config.PICT_DIR, exist_ok=True)
 os.makedirs(config.SAVE_DIR, exist_ok=True)
@@ -103,7 +104,7 @@ def preprocess_data(): # TO SUPPRESS
     return X_tr, X_te, y_tr_01, train_ids, test_ids
 
 
-def tune_hyperparameter(X_tr, y_tr_01, folds):
+def tune_hyperparameter(X_tr, y_tr_01, folds): #TO SUPPRESS FOR FINAL SUBMISSION
     t_tune = time.time()
 
     if config.DO_TUNE:       
@@ -221,6 +222,17 @@ def main():
         test_ids  = npz["test_ids"]
         print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
     print(f"[Preprocessing] {time.time() - t:.1f}s")
+
+    t = time.time()
+    if config.HYPERPARAM_TUNING:
+        # compute 
+           
+    else: 
+        # NEED TO KEEP PARAM DATA IN GITHUB so TAs don't have to run it 
+        # load them
+        tuning.tune()
+    print(f"[Tuning] {time.time() - t:.1f}s")
+
 
     #if config.DO_TUNE:
 

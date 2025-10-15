@@ -4,22 +4,49 @@ import metrics
 import implementations
 
 
-def stratified_kfold_indices(y01, n_splits=5, seed=42): # %val=1/n_splits
-    rng = np.random.RandomState(seed)
-    y = np.asarray(y01).astype(int)
-    pos = np.where(y == 1)[0]
-    neg = np.where(y == 0)[0]
-    rng.shuffle(pos); rng.shuffle(neg)
-    pos_splits = np.array_split(pos, n_splits)
-    neg_splits = np.array_split(neg, n_splits)
+#stratified_kfold_indices
+def create_stratified_folds(ytr_01, k=5, random_seed=42): 
+    """
+    Create stratified k-fold cross-validation indices.
+    
+    Args:
+        y_binary: Binary labels (0 or 1)
+        k: Number of folds
+        random_seed: Random seed for reproducibility
+        
+    Returns:
+        List of (train_indices, val_indices) tuples, one per fold
+    """
+    rng = np.random.RandomState(random_seed)
+    y = np.asarray(ytr_01, dtype=int)
+
+    # Seperate indices by class 
+    pos_idx = np.where(y == 1)[0]
+    neg_idx = np.where(y == 0)[0]
+
+    # Shuffle indices
+    rng.shuffle(pos_idx)
+    rng.shuffle(neg_idx)
+
+    # Splite each class into k equal parts 
+    pos_folds = np.array_split(pos_idx, k)
+    neg_folds = np.array_split(neg_idx, k)
+
     folds = []
-    for k in range(n_splits):
-        va_idx = np.concatenate([pos_splits[k], neg_splits[k]])
-        rng.shuffle(va_idx)  #mix pos and neg again
-        mask = np.ones(y.shape[0], dtype=bool)
-        mask[va_idx] = False
-        tr_idx = np.where(mask)[0]
-        folds.append((tr_idx, va_idx))
+    n_samples = len(ytr_01)
+
+    for fold_idx in range(k):
+        # Validation set:
+        val_idx = np.concatenate([pos_folds[fold_idx], neg_folds[fold_idx]])
+        rng.shuffle(val_idx)  # Mix positive and negative samples
+
+        # Training set:
+        is_train = np.ones(n_samples, dtype=bool)
+        is_train[val_idx] = False
+        train_idx = np.where(is_train)[0]
+
+        folds.append((train_idx, val_idx))
+
     return folds
 
 
