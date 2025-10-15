@@ -178,31 +178,6 @@ def make_submission(X_te, w_final, best_thr, test_ids):
     preds_pm1_te = metrics.to_pm1_labels(preds01_te)
     helpers.create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
     print(f"[Submission] saved -> {config.OUTPUT_PRED}")
-   
-
-# def main():
-#     t0 = time.time()
-     
-#     print("Loading data from:", config.DATA_DIR)
-#     X_tr, X_te, y_tr_01, train_ids, test_ids = preprocess_data()
-
-#     N_SPLITS = 5      
-
-#     folds = cv_utils.stratified_kfold_indices(y_tr_01, n_splits=N_SPLITS, seed=config.RNG_SEED)
-
-#     _, va_idx= folds[0]  #for final eval only
-
-#     best_lambda, best_gamma, best_thr = tune_hyperparameter(X_tr, y_tr_01, folds)
-
-#     if config.DO_SUBMISSION:
-#         w_final = train_final_model(X_tr, y_tr_01, best_lambda, best_gamma)
-#         make_submission(X_te, w_final, best_thr, test_ids)
-
-#         # validation metrics & plots using the final model
-#         # probs_va_final = implementations.sigmoid(X_tr[va_idx].dot(w_final))
-#         # evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va_final, best_thr)
-
-#         print(f"[TOTAL] {time.time() - t0:.1f}s.")
 
 
 def main():
@@ -212,6 +187,7 @@ def main():
         x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
         X_tr, X_te, ytr_01 = preprocessing.preprocess2(x_train, x_test, y_train_pm1, train_ids, test_ids, config.PREPROC2_DATA_PATH)
     else:
+        ## MOVE THIS SHIT TO preprocessing.py 
         if not os.path.exists(config.SAVE_PREPROCESSED):
             raise FileNotFoundError(f"{config.SAVE_PREPROCESSED} not found.")
         npz = np.load(config.SAVE_PREPROCESSED) 
@@ -225,14 +201,10 @@ def main():
 
     t = time.time()
     if config.HYPERPARAM_TUNING:
-        # compute 
-           
+        best_params = tuning.tune(X_tr, ytr_01, force_retune=True)
     else: 
-        # NEED TO KEEP PARAM DATA IN GITHUB so TAs don't have to run it 
-        # load them
-        tuning.tune()
+        best_params = tuning.load_tuning_results()
     print(f"[Tuning] {time.time() - t:.1f}s")
-
 
     #if config.DO_TUNE:
 

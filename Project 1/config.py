@@ -62,3 +62,7 @@ MAX_ADDED_ONEHOT    = 120   # Limits the total number of new columns added by en
 CAT = [1, 2,  ]             # categorical feature indices
 DISC = [5, 8, 15, 22]       # discrete feature indices
 CONT = [0, 1, 2, 4, 6]      # continuous feature indices
+
+
+EPS = 1e-12 # Avoid division by 0
+N_FOLDS = 5
