@@ -1,0 +1,91 @@
+[2025-10-15 18:35:40] Experiments: GD_none, Adam_none, Adam_cos
+[2025-10-15 18:35:40] === Run GD_none adam=False schedule=none ===
+[2025-10-15 18:35:45] [it=30] loss=0.543472 lr=3.000e-02 grad_norm=3.375e-01 update_norm=1.021e-02
+[2025-10-15 18:35:50] [it=60] loss=0.460529 lr=3.000e-02 grad_norm=2.716e-01 update_norm=8.201e-03
+[2025-10-15 18:35:54] [it=90] loss=0.405405 lr=3.000e-02 grad_norm=2.243e-01 update_norm=6.765e-03
+[2025-10-15 18:35:59] [it=120] loss=0.367153 lr=3.000e-02 grad_norm=1.887e-01 update_norm=5.687e-03
+[2025-10-15 18:36:04] [it=150] loss=0.339656 lr=3.000e-02 grad_norm=1.614e-01 update_norm=4.859e-03
+[2025-10-15 18:36:09] [it=180] loss=0.319282 lr=3.000e-02 grad_norm=1.400e-01 update_norm=4.211e-03
+[2025-10-15 18:36:14] [it=210] loss=0.303785 lr=3.000e-02 grad_norm=1.229e-01 update_norm=3.693e-03
+[2025-10-15 18:36:19] [it=240] loss=0.291730 lr=3.000e-02 grad_norm=1.090e-01 update_norm=3.273e-03
+[2025-10-15 18:36:24] [it=270] loss=0.282166 lr=3.000e-02 grad_norm=9.755e-02 update_norm=2.927e-03
+[2025-10-15 18:36:29] [it=300] loss=0.274449 lr=3.000e-02 grad_norm=8.801e-02 update_norm=2.639e-03
+[2025-10-15 18:36:29] [VAL] thr=0.290 acc=0.8630 F1=0.4084 (P=0.3299, R=0.5357)
+[2025-10-15 18:36:29] === Run Adam_none adam=True schedule=none ===
+[2025-10-15 18:36:33] [it=30] loss=0.396807 lr=3.000e-02 grad_norm=2.228e-01 update_norm=4.693e-02
+[2025-10-15 18:36:38] [it=60] loss=0.292749 lr=3.000e-02 grad_norm=1.142e-01 update_norm=1.998e-02
+[2025-10-15 18:36:43] [it=90] loss=0.255225 lr=3.000e-02 grad_norm=6.623e-02 update_norm=1.295e-02
+[2025-10-15 18:36:48] [it=120] loss=0.239233 lr=3.000e-02 grad_norm=4.309e-02 update_norm=9.552e-03
+[2025-10-15 18:36:53] [it=150] loss=0.231290 lr=3.000e-02 grad_norm=2.994e-02 update_norm=7.566e-03
+[2025-10-15 18:36:57] [it=180] loss=0.226918 lr=3.000e-02 grad_norm=2.176e-02 update_norm=6.197e-03
+[2025-10-15 18:37:02] [it=210] loss=0.224341 lr=3.000e-02 grad_norm=1.633e-02 update_norm=5.176e-03
+[2025-10-15 18:37:07] [it=240] loss=0.222751 lr=3.000e-02 grad_norm=1.255e-02 update_norm=4.375e-03
+[2025-10-15 18:37:12] [it=270] loss=0.221736 lr=3.000e-02 grad_norm=9.810e-03 update_norm=3.728e-03
+[2025-10-15 18:37:16] [it=300] loss=0.221072 lr=3.000e-02 grad_norm=7.776e-03 update_norm=3.193e-03
+[2025-10-15 18:37:17] [VAL] thr=0.233 acc=0.8770 F1=0.4162 (P=0.3581, R=0.4967)
+[2025-10-15 18:37:17] === Run Adam_cos adam=True schedule=cos ===
+[2025-10-15 18:37:22] [it=30] loss=0.398045 lr=2.931e-02 grad_norm=2.233e-01 update_norm=4.651e-02
+[2025-10-15 18:37:27] [it=60] loss=0.296767 lr=2.723e-02 grad_norm=1.184e-01 update_norm=1.917e-02
+[2025-10-15 18:37:33] [it=90] loss=0.260830 lr=2.394e-02 grad_norm=7.382e-02 update_norm=1.088e-02
+[2025-10-15 18:37:38] [it=120] loss=0.245669 lr=1.978e-02 grad_norm=5.281e-02 update_norm=7.203e-03
+[2025-10-15 18:37:43] [it=150] loss=0.238287 lr=1.516e-02 grad_norm=4.161e-02 update_norm=4.816e-03
+[2025-10-15 18:37:49] [it=180] loss=0.234409 lr=1.051e-02 grad_norm=3.532e-02 update_norm=3.096e-03
+[2025-10-15 18:37:54] [it=210] loss=0.232354 lr=6.311e-03 grad_norm=3.183e-02 update_norm=1.802e-03
+[2025-10-15 18:37:59] [it=240] loss=0.231350 lr=2.958e-03 grad_norm=3.007e-02 update_norm=8.503e-04
+[2025-10-15 18:38:04] [it=270] loss=0.230974 lr=7.835e-04 grad_norm=2.941e-02 update_norm=2.330e-04
+[2025-10-15 18:38:10] [it=300] loss=0.230917 lr=8.225e-07 grad_norm=2.931e-02 update_norm=2.572e-07
+[2025-10-15 18:38:10] [VAL] thr=0.216 acc=0.8548 F1=0.4161 (P=0.3225, R=0.5861)
+[2025-10-15 18:38:10] Saved histories -> c:\Users\alexb\OneDrive - Université Libre de Bruxelles\MA2 EPFL\CS-433\Projects\Project 1\notebook\data_saving\optimizer_viz_histories.npz
+[2025-10-15 18:38:10] Saved figure -> c:\Users\alexb\OneDrive - Université Libre de Bruxelles\MA2 EPFL\CS-433\Projects\Project 1\notebook\picture\optimizer_compare_numpy.png
+[2025-10-15 18:38:10] GD_none: val_acc=0.8630 val_f1=0.4084 final_loss=0.2744
+[2025-10-15 18:38:10] Adam_none: val_acc=0.8770 val_f1=0.4162 final_loss=0.2211
+[2025-10-15 18:38:10] Adam_cos: val_acc=0.8548 val_f1=0.4161 final_loss=0.2309
+[2025-10-15 18:38:11] [INFO] No curve file found at c:\Users\alexb\OneDrive - Université Libre de Bruxelles\MA2 EPFL\CS-433\Projects\Project 1\data_saving\final_training_curve.npz; run run.py with DO_SUBMISSION=True and HOLDOUT_VAL_FRAC>0
+[2025-10-15 19:58:22] Experiments: GD_none, Adam_none, Adam_cos
+[2025-10-15 19:58:22] === Run GD_none adam=False schedule=none ===
+[2025-10-15 19:58:24] [it=30] loss=0.543472 lr=3.000e-02 grad_norm=3.375e-01 update_norm=1.021e-02
+[2025-10-15 19:58:27] [it=60] loss=0.460529 lr=3.000e-02 grad_norm=2.716e-01 update_norm=8.201e-03
+[2025-10-15 19:58:29] [it=90] loss=0.405405 lr=3.000e-02 grad_norm=2.243e-01 update_norm=6.765e-03
+[2025-10-15 19:58:31] [it=120] loss=0.367153 lr=3.000e-02 grad_norm=1.887e-01 update_norm=5.687e-03
+[2025-10-15 19:58:33] [it=150] loss=0.339656 lr=3.000e-02 grad_norm=1.614e-01 update_norm=4.859e-03
+[2025-10-15 19:58:35] [it=180] loss=0.319282 lr=3.000e-02 grad_norm=1.400e-01 update_norm=4.211e-03
+[2025-10-15 19:58:38] [it=210] loss=0.303785 lr=3.000e-02 grad_norm=1.229e-01 update_norm=3.693e-03
+[2025-10-15 19:58:40] [it=240] loss=0.291730 lr=3.000e-02 grad_norm=1.090e-01 update_norm=3.273e-03
+[2025-10-15 19:58:42] [it=270] loss=0.282166 lr=3.000e-02 grad_norm=9.755e-02 update_norm=2.927e-03
+[2025-10-15 19:58:44] [it=300] loss=0.274449 lr=3.000e-02 grad_norm=8.801e-02 update_norm=2.639e-03
+[2025-10-15 19:58:44] [VAL] thr=0.290 acc=0.8630 F1=0.4084 (P=0.3299, R=0.5357)
+[2025-10-15 19:58:44] === Run Adam_none adam=True schedule=none ===
+[2025-10-15 19:58:47] [it=30] loss=0.396807 lr=3.000e-02 grad_norm=2.228e-01 update_norm=4.693e-02
+[2025-10-15 19:58:49] [it=60] loss=0.292749 lr=3.000e-02 grad_norm=1.142e-01 update_norm=1.998e-02
+[2025-10-15 19:58:51] [it=90] loss=0.255225 lr=3.000e-02 grad_norm=6.623e-02 update_norm=1.295e-02
+[2025-10-15 19:58:54] [it=120] loss=0.239233 lr=3.000e-02 grad_norm=4.309e-02 update_norm=9.552e-03
+[2025-10-15 19:58:56] [it=150] loss=0.231290 lr=3.000e-02 grad_norm=2.994e-02 update_norm=7.566e-03
+[2025-10-15 19:58:58] [it=180] loss=0.226918 lr=3.000e-02 grad_norm=2.176e-02 update_norm=6.197e-03
+[2025-10-15 19:59:00] [it=210] loss=0.224341 lr=3.000e-02 grad_norm=1.633e-02 update_norm=5.176e-03
+[2025-10-15 19:59:03] [it=240] loss=0.222751 lr=3.000e-02 grad_norm=1.255e-02 update_norm=4.375e-03
+[2025-10-15 19:59:05] [it=270] loss=0.221736 lr=3.000e-02 grad_norm=9.810e-03 update_norm=3.728e-03
+[2025-10-15 19:59:07] [it=300] loss=0.221072 lr=3.000e-02 grad_norm=7.776e-03 update_norm=3.193e-03
+[2025-10-15 19:59:07] [VAL] thr=0.233 acc=0.8770 F1=0.4162 (P=0.3581, R=0.4967)
+[2025-10-15 19:59:07] === Run Adam_cos adam=True schedule=cos ===
+[2025-10-15 19:59:11] [it=30] loss=0.398045 lr=2.931e-02 grad_norm=2.233e-01 update_norm=4.651e-02
+[2025-10-15 19:59:13] [it=60] loss=0.296767 lr=2.723e-02 grad_norm=1.184e-01 update_norm=1.917e-02
+[2025-10-15 19:59:15] [it=90] loss=0.260830 lr=2.394e-02 grad_norm=7.382e-02 update_norm=1.088e-02
+[2025-10-15 19:59:17] [it=120] loss=0.245669 lr=1.978e-02 grad_norm=5.281e-02 update_norm=7.203e-03
+[2025-10-15 19:59:20] [it=150] loss=0.238287 lr=1.516e-02 grad_norm=4.161e-02 update_norm=4.816e-03
+[2025-10-15 19:59:22] [it=180] loss=0.234409 lr=1.051e-02 grad_norm=3.532e-02 update_norm=3.096e-03
+[2025-10-15 19:59:24] [it=210] loss=0.232354 lr=6.311e-03 grad_norm=3.183e-02 update_norm=1.802e-03
+[2025-10-15 19:59:26] [it=240] loss=0.231350 lr=2.958e-03 grad_norm=3.007e-02 update_norm=8.503e-04
+[2025-10-15 19:59:28] [it=270] loss=0.230974 lr=7.835e-04 grad_norm=2.941e-02 update_norm=2.330e-04
+[2025-10-15 19:59:31] [it=300] loss=0.230917 lr=8.225e-07 grad_norm=2.931e-02 update_norm=2.572e-07
+[2025-10-15 19:59:31] [VAL] thr=0.216 acc=0.8548 F1=0.4161 (P=0.3225, R=0.5861)
+[2025-10-15 19:59:31] Saved histories -> c:\Users\alexb\OneDrive - Université Libre de Bruxelles\MA2 EPFL\CS-433\Projects\Project 1\notebook\data_saving\optimizer_viz_histories.npz
+[2025-10-15 19:59:31] Saved figure -> c:\Users\alexb\OneDrive - Université Libre de Bruxelles\MA2 EPFL\CS-433\Projects\Project 1\notebook\picture\optimizer_compare_numpy.png
+[2025-10-15 19:59:31] GD_none: val_acc=0.8630 val_f1=0.4084 final_loss=0.2744
+[2025-10-15 19:59:31] Adam_none: val_acc=0.8770 val_f1=0.4162 final_loss=0.2211
+[2025-10-15 19:59:31] Adam_cos: val_acc=0.8548 val_f1=0.4161 final_loss=0.2309
+[2025-10-15 19:59:31] Saved final training curve figure -> c:\Users\alexb\OneDrive - Université Libre de Bruxelles\MA2 EPFL\CS-433\Projects\Project 1\notebook\picture\final_training_curve.png
+[2025-10-15 20:19:29] Saved figure -> c:\Users\alexb\OneDrive - Université Libre de Bruxelles\MA2 EPFL\CS-433\Projects\Project 1\notebook\picture\optimizer_compare_numpy.png
+[2025-10-15 20:19:29] GD_none: val_acc=0.8742 val_f1=0.4097 final_loss=0.2572
+[2025-10-15 20:19:29] Adam_none: val_acc=0.8686 val_f1=0.4171 final_loss=0.2201
+[2025-10-15 20:19:29] Adam_cos: val_acc=0.8609 val_f1=0.4157 final_loss=0.2247
+[2025-10-15 20:19:29] Adam_cos_ES: val_acc=0.8609 val_f1=0.4157 final_loss=0.2247

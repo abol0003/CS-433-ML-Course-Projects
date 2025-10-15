@@ -3,6 +3,18 @@ import numpy as np
 import metrics
 import implementations
 
+# simple LR schedules (callables): lr = schedule(lr0, t, T)
+def schedule_none(lr0, t, T):
+    return lr0
+
+def schedule_cosine(lr0, t, T):
+    # half cosine from lr0 -> 0
+    import math
+    return lr0 * 0.5 * (1 + math.cos(math.pi * t / max(1, T)))
+
+def schedule_exponential(lr0, t, T, decay=0.99):
+    return lr0 * (decay ** t)
+
 
 def stratified_kfold_indices(y01, n_splits=5, seed=42): # %val=1/n_splits
     rng = np.random.RandomState(seed)
@@ -41,12 +53,44 @@ def best_threshold_by_f1(y_true01, scores):
 
 
 def cv_train_and_eval(args):
-    y_tr_01, X_tr, folds, lam, gam, max_iters = args
+    (
+        y_tr_01,
+        X_tr,
+        folds,
+        lam,
+        gam,
+        max_iters,
+        use_adam,
+        schedule_name,
+        early_stopping,
+        patience,
+        tol,
+    ) = args
+    # pick schedule
+    if schedule_name == "cosine":
+        schedule = schedule_cosine
+    elif schedule_name == "exponential":
+        schedule = schedule_exponential
+    else:
+        schedule = None
     #cross-validation with best threshold found on each fold
     per_fold_probs, per_fold_idx = [], []
     for (tr_idx, va_idx) in folds:
         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-        w, _ = implementations.reg_logistic_regression(y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam)
+        w, _ = implementations.reg_logistic_regression(
+            y_tr_01[tr_idx],
+            X_tr[tr_idx],
+            lam,
+            w0,
+            max_iters,
+            gam,
+            adam=use_adam,
+            schedule=schedule,
+            early_stopping=early_stopping,
+            patience=patience,
+            tol=tol,
+            verbose=False,
+        )
         probs_va = implementations.sigmoid(X_tr[va_idx].dot(w))
         per_fold_probs.append(probs_va)
         per_fold_idx.append(va_idx)
