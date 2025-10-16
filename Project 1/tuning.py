@@ -42,6 +42,7 @@ def grid_search_cv(X, y, lambda_grid=config.LAMBDA, gamma_grid=config.GAMMA, max
     # Find best configuration by F1 score
     best_result = max(results, key=lambda r: r['mean_f1'])
     
+    # suppress these prints
     print(f"\n[BEST CV] lambda={best_result['lambda']:.3e}, "
           f"gamma={best_result['learning_rate']:.3e}, "
           f"threshold={best_result['optimal_threshold']:.3f}")
@@ -51,7 +52,7 @@ def grid_search_cv(X, y, lambda_grid=config.LAMBDA, gamma_grid=config.GAMMA, max
     return best_result, results
 
 
-def save_tuning_results(results, results_list, filepath_npz=config.SAVE_BEST, filepath_csv=None):
+def save_tuning_results(results, results_list, filepath_npz=config.BEST_PARAM_PATH, filepath_csv=config.TUNING_PATH):
     """
     Save best hyperparameters and all grid search results.
     
@@ -66,7 +67,7 @@ def save_tuning_results(results, results_list, filepath_npz=config.SAVE_BEST, fi
     np.savez(
         filepath_npz,
         lambda_=results['lambda'],
-        gamma=results['gamma'],
+        gamma=results['learning_rate'],
         max_iters=results['max_iters'],
         mean_accuracy=results['mean_accuracy'],
         std_accuracy=results['std_accuracy'],
@@ -79,16 +80,13 @@ def save_tuning_results(results, results_list, filepath_npz=config.SAVE_BEST, fi
         optimal_threshold=results['optimal_threshold']
     )
     print(f"[Saved] Best hyperparameters -> {filepath_npz}")
-    
-    # Save all results to CSV
-    if filepath_csv is None:
-        filepath_csv = filepath_npz.replace('.npz', '_all_results.csv')
+
     
     # Write CSV manually without pandas
     # Column order: lambda, gamma, max_iters, acc_mean, acc_std, prec_mean, prec_std, rec_mean, rec_std, f1_mean, f1_std, optimal_threshold
     with open(filepath_csv, 'w') as f:
         # Write header
-        f.write('lambda,gamma,max_iters,mean_accuracy,std_accuracy,mean_precision,std_precision,mean_recall,std_recall,mean_f1,std_f1,optimal_threshold\n')
+        f.write('lambda,gamma,max_iters,acc_mean,acc_std,prec_mean,prec_std,rec_mean,rec_std,f1_mean,f1_std,optimal_threshold\n')
         
         # Write each result row
         for r in results_list:
@@ -102,32 +100,35 @@ def save_tuning_results(results, results_list, filepath_npz=config.SAVE_BEST, fi
     print(f"[Saved] All grid search results ({len(results_list)} combinations) -> {filepath_csv}")
 
 
-def load_tuning_results(filepath=config.SAVE_BEST):
+#==========================================
+
+# SUPPRESS IF YOU CAN GET THE BEST PARAM QUICKLY WITH .csv
+def load_tuning_results(filepath_npz=config.BEST_PARAM_PATH): 
     """Load best hyperparameters from disk."""
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"{filepath} not found.")
+    if not os.path.exists(filepath_npz):
+        raise FileNotFoundError(f"{filepath_npz} not found.")
     
-    npz = np.load(filepath)
+    npz = np.load(filepath_npz)
     results = {
         'lambda': float(npz['lambda_']),
-        'gamma': float(npz['gamma']),
+        'learning_rate': float(npz['gamma']),
+        'optimal_threshold': float(npz['threshold']),
         'max_iters': int(npz['max_iters']),
+        'mean_f1': float(npz['mean_f1']),
+        'std_f1': float(npz['std_f1']),
         'mean_accuracy': float(npz['mean_accuracy']),
         'std_accuracy': float(npz['std_accuracy']),
         'mean_precision': float(npz['mean_precision']),
         'std_precision': float(npz['std_precision']),
         'mean_recall': float(npz['mean_recall']),
-        'std_recall': float(npz['std_recall']),
-        'mean_f1': float(npz['mean_f1']),
-        'std_f1': float(npz['std_f1']),
-        'optimal_threshold': float(npz['optimal_threshold'])
+        'std_recall': float(npz['std_recall'])
     }
     
-    print(f"[Loaded] Best hyperparameters from -> {filepath}")
+    print(f"[Loaded] Best hyperparameters from -> {filepath_npz}")
     return results
 
 
-def load_best_from_csv(filepath_csv):
+def load_best_from_csv(filepath_csv=config.TUNING_PATH):
     """
     Load best hyperparameters from CSV by selecting row with highest f1_mean.
     
@@ -140,7 +141,7 @@ def load_best_from_csv(filepath_csv):
     if not os.path.exists(filepath_csv):
         raise FileNotFoundError(f"{filepath_csv} not found.")
     
-    # Read CSV manually without pandas.. casse la tête
+    # Read CSV manually without pandas
     with open(filepath_csv, 'r') as f:
         lines = f.readlines()
     
@@ -167,39 +168,40 @@ def load_best_from_csv(filepath_csv):
     # Convert to same format as load_tuning_results()
     results = {
         'lambda': float(best_row['lambda']),
-        'gamma': float(best_row['gamma']),
+        'learning_rate': float(best_row['gamma']),
+        'optimal_threshold': float(best_row['optimal_threshold']),
         'max_iters': int(best_row['max_iters']),
-        'mean_accuracy': float(best_row['mean_accuracy']),
-        'std_accuracy': float(best_row['std_accuracy']),
-        'mean_precision': float(best_row['mean_precision']),
-        'std_precision': float(best_row['std_precision']),
-        'mean_recall': float(best_row['mean_recall']),
-        'std_recall': float(best_row['std_recall']),
-        'mean_f1': float(best_row['mean_f1']),
-        'std_f1': float(best_row['std_f1']),
-        'optimal_threshold': float(best_row['optimal_threshold'])
+        'mean_f1': float(best_row['f1_mean']),
+        'std_f1': float(best_row['f1_std']),
+        'mean_accuracy': float(best_row['acc_mean']),
+        'std_accuracy': float(best_row['acc_std']),
+        'mean_precision': float(best_row['prec_mean']),
+        'std_precision': float(best_row['prec_std']),
+        'mean_recall': float(best_row['rec_mean']),
+        'std_recall': float(best_row['rec_std'])
     }
     
     print(f"[Loaded] Best hyperparameters from CSV -> {filepath_csv}")
-    print(f"[BEST] lambda={results['lambda']:.3e}, gamma={results['gamma']:.3e}, "
+    print(f"[BEST] lambda={results['lambda']:.3e}, gamma={results['learning_rate']:.3e}, "
           f"F1={results['mean_f1']:.4f} (±{results['std_f1']:.4f})")
     
     return results
 
 
-def tune(X, y, force_retune=False):
+#==========================================
+
+def tune(X, y):
     """
     Main tuning function: run or load hyperparameter search.
     
     Args:
         X: Feature matrix
         y: Binary labels
-        force_retune: If True, always retune even if saved results exist
         
     Returns:
         dict: Best hyperparameters
     """
-    if force_retune or not os.path.exists(config.SAVE_BEST):
+    if config.HYPERPARAM_TUNING:
         best_result, results_list = grid_search_cv(X, y)
         save_tuning_results(best_result, results_list)
     else:

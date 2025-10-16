@@ -197,7 +197,6 @@ def cross_validate_logistic_regression(y, X, lambda_, gamma, max_iters=config.MA
         'lambda': float(lambda_),
         'gamma': float(gamma),
         'max_iters': int(max_iters),
-        'optimal_threshold': float(optimal_threshold),
         'mean_accuracy': float(np.mean(fold_metrics['accuracy'])),
         'std_accuracy': float(np.std(fold_metrics['accuracy'])),
         'mean_precision': float(np.mean(fold_metrics['precision'])),
@@ -205,7 +204,8 @@ def cross_validate_logistic_regression(y, X, lambda_, gamma, max_iters=config.MA
         'mean_recall': float(np.mean(fold_metrics['recall'])),
         'std_recall': float(np.std(fold_metrics['recall'])),
         'mean_f1': float(np.mean(fold_metrics['f1'])),
-        'std_f1': float(np.std(fold_metrics['f1']))
+        'std_f1': float(np.std(fold_metrics['f1'])),
+        'optimal_threshold': float(optimal_threshold)
     }
 
 

@@ -22,88 +22,7 @@ os.makedirs(config.SAVE_DIR, exist_ok=True)
 np.random.seed(config.RNG_SEED)
 
 
-def binary_clf_curves(y_true01, scores):
-    y = np.asarray(y_true01)
-    s = np.asarray(scores)
-    order = np.argsort(-s)
-    y = y[order]
-    P = np.sum(y == 1)
-    N = np.sum(y == 0)
-    tps = np.cumsum(y == 1)
-    fps = np.cumsum(y == 0)
-    tpr = tps / (P + 1e-12)
-    fpr = fps / (N + 1e-12)
-    precision = tps / (tps + fps + 1e-12)
-    recall = tpr
-    roc_auc = float(np.trapezoid(tpr, fpr))
-    pr_auc = float(np.trapezoid(precision, recall))
-    return fpr, tpr, precision, recall, roc_auc, pr_auc
-
-
-def evaluate_and_plot_final(X_tr, y_tr_01, va_idx, probs_va, thr, out_prefix=""):
-    """Compute final metrics on hold-out (with final model), save plots."""
-    preds_va = (probs_va >= thr).astype(int)
-    acc = metrics.accuracy_score(y_tr_01[va_idx], preds_va)
-    prec, rec, f1 = metrics.precision_recall_f1(y_tr_01[va_idx], preds_va)
-    print(f"[FINAL] ACC={acc:.4f}  P={prec:.4f}  R={rec:.4f}  F1={f1:.4f}")
-
-    # Confusion matrix
-    cm = metrics.confusion_matrix(y_tr_01[va_idx], preds_va)
-    plots.plot_confusion_matrix(cm, config.CONF_MAT_FIG, class_names=("0","1"))
-    print(f"[Figure] Confusion matrix -> {config.CONF_MAT_FIG}")
-
-    # ROC & PR 
-    fpr, tpr, precision, recall, roc_auc, pr_auc = binary_clf_curves(y_tr_01[va_idx], probs_va)
-    plots.plot_curve(fpr, tpr, config.ROC_FIG, xlabel="FPR", ylabel="TPR", title=f"ROC (AUC={roc_auc:.4f})")
-    print(f"[Figure] ROC curve -> {config.ROC_FIG}")
-    plots.plot_curve(recall, precision, config.PR_FIG, xlabel="Recall", ylabel="Precision", title=f"PR (AUC={pr_auc:.4f})")
-    print(f"[Figure] PR curve -> {config.PR_FIG}")
-
-
-#========================================
-#the two functions above will be removed. 
-#========================================
-
-
-def sample_loguniform(low, high, size, rng=np.random.RandomState(config.RNG_SEED)):
-    lo, hi = np.log(low), np.log(high)
-    return np.exp(rng.uniform(lo, hi, size))
-
-
-def preprocess_data(): # TO SUPPRESS 
-    t_preprocess = time.time()
-
-    if config.DO_PREPROCESS:
-        x_train, x_test, y_train_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
-
-        X_tr, X_te = preprocessing.preprocess(x_train, x_test)
-        
-        
-        # func in implementations.py assumes y takes {0,1} !
-        y_tr_01 = metrics.to_01_labels(y_train_pm1) 
-
-        np.savez_compressed(
-            config.SAVE_PREPROCESSED,
-            X_train=X_tr, X_test=X_te, y_train=y_tr_01,
-            train_ids=train_ids, test_ids=test_ids
-        )
-        print(f"[Saved] Preprocessed data -> {config.SAVE_PREPROCESSED}")
-
-    else:
-        if not os.path.exists(config.SAVE_PREPROCESSED):
-            raise FileNotFoundError(f"{config.SAVE_PREPROCESSED} not found.")
-        npz = np.load(config.SAVE_PREPROCESSED) 
-        X_tr      = npz["X_train"]
-        X_te      = npz["X_test"]
-        y_tr_01   = npz["y_train"]
-        train_ids = npz["train_ids"]
-        test_ids  = npz["test_ids"]
-        print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
-
-    print(f"[Preprocessing] {time.time() - t_preprocess:.1f}s")
-    return X_tr, X_te, y_tr_01, train_ids, test_ids
-
-
+# TO SUPPRESS
 def tune_hyperparameter(X_tr, y_tr_01, folds): #TO SUPPRESS FOR FINAL SUBMISSION
     t_tune = time.time()
 
@@ -188,24 +107,26 @@ def main():
         X_tr, X_te, ytr_01 = preprocessing.preprocess2(x_train, x_test, y_train_pm1, train_ids, test_ids, config.PREPROC2_DATA_PATH)
     else:
         ## MOVE THIS SHIT TO preprocessing.py 
-        if not os.path.exists(config.SAVE_PREPROCESSED):
-            raise FileNotFoundError(f"{config.SAVE_PREPROCESSED} not found.")
-        npz = np.load(config.SAVE_PREPROCESSED) 
+        # call it as func with arg to load the right preproc data
+        if not os.path.exists(config.PREPROC2_DATA_PATH):
+            raise FileNotFoundError(f"{config.PREPROC2_DATA_PATH} not found.")
+        npz = np.load(config.PREPROC2_DATA_PATH) 
         Xtr      = npz["X_train"]
         Xte      = npz["X_test"]
         ytr_01   = npz["y_train"]
         train_ids = npz["train_ids"]
         test_ids  = npz["test_ids"]
-        print(f"[Loaded] Preprocessed data from -> {config.SAVE_PREPROCESSED}")
+        print(f"[Loaded] Preprocessed data from -> {config.PREPROC2_DATA_PATH}")
     print(f"[Preprocessing] {time.time() - t:.1f}s")
 
-    t = time.time()
+    #==========================================
+    t = time.time()   
     if config.HYPERPARAM_TUNING:
-        best_params = tuning.tune(X_tr, ytr_01, force_retune=True)
+        best_params = tuning.tune(Xtr, ytr_01)
     else: 
-        best_params = tuning.load_tuning_results()
+        best_params = tuning.load_tuning_results() 
     print(f"[Tuning] {time.time() - t:.1f}s")
-
+    #==========================================
     # Extract parameters
     best_lambda = best_params['lambda']
     best_gamma = best_params['learning_rate']
@@ -213,8 +134,19 @@ def main():
     #...
 
 
-
-    #if config.DO_SUBMISSION:
+    # Final training + submission
+    # if config.DO_SUBMISSION:
+    #     # Enregistre les courbes train/val avec un holdout (run séparé, honnête)
+    #     if getattr(config, "HOLDOUT_VAL_FRAC", 0.0) > 0:
+    #         save_training_curves_with_holdout(
+    #             X_tr, y_tr_01, best_lambda, best_gamma, use_adam=best_adam, schedule_name=best_sched
+    #         )
+    #     # Entraînement final sur tout le train (pour la soumission)
+    #     w_final = train_final_model(
+    #         X_tr, y_tr_01, best_lambda, best_gamma, use_adam=best_adam, schedule_name=best_sched
+    #     )
+    #     make_submission(X_te, w_final, best_thr, test_ids)
+    #     print(f"[TOTAL] {time.time() - t:.1f}s.")
 
 
 if __name__ == "__main__":
