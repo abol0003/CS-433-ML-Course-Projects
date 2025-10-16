@@ -67,7 +67,7 @@ def save_tuning_results(results, results_list, filepath_npz=config.BEST_PARAM_PA
     np.savez(
         filepath_npz,
         lambda_=results['lambda'],
-        gamma=results['learning_rate'],
+        gamma=results['gamma'],
         max_iters=results['max_iters'],
         mean_accuracy=results['mean_accuracy'],
         std_accuracy=results['std_accuracy'],
@@ -111,7 +111,7 @@ def load_tuning_results(filepath_npz=config.BEST_PARAM_PATH):
     npz = np.load(filepath_npz)
     results = {
         'lambda': float(npz['lambda_']),
-        'learning_rate': float(npz['gamma']),
+        'gamma': float(npz['gamma']),
         'optimal_threshold': float(npz['threshold']),
         'max_iters': int(npz['max_iters']),
         'mean_f1': float(npz['mean_f1']),
@@ -168,7 +168,7 @@ def load_best_from_csv(filepath_csv=config.TUNING_PATH):
     # Convert to same format as load_tuning_results()
     results = {
         'lambda': float(best_row['lambda']),
-        'learning_rate': float(best_row['gamma']),
+        'gamma': float(best_row['gamma']),
         'optimal_threshold': float(best_row['optimal_threshold']),
         'max_iters': int(best_row['max_iters']),
         'mean_f1': float(best_row['f1_mean']),
@@ -182,7 +182,7 @@ def load_best_from_csv(filepath_csv=config.TUNING_PATH):
     }
     
     print(f"[Loaded] Best hyperparameters from CSV -> {filepath_csv}")
-    print(f"[BEST] lambda={results['lambda']:.3e}, gamma={results['learning_rate']:.3e}, "
+    print(f"[BEST] lambda={results['lambda']:.3e}, gamma={results['gamma']:.3e}, "
           f"F1={results['mean_f1']:.4f} (±{results['std_f1']:.4f})")
     
     return results
