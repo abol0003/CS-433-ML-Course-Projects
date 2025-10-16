@@ -33,8 +33,8 @@ RNG_SEED = 42
 
 #====================================================
 # Tuning parameters 
-HOLDOUT_VAL_FRAC = 0.20
-TUNING_MAX_ITERS = 500  # Reduced from higher value for faster testing
+#HOLDOUT_VAL_FRAC = 0.20
+#TUNING_MAX_ITERS = 500  # Reduced from higher value for faster testing
 FINAL_MAX_ITERS  = 1200
 GAMMA_LOW = 1e-7  
 GAMMA_HIGH = 1 

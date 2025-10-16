@@ -206,7 +206,13 @@ def main():
         best_params = tuning.load_tuning_results()
     print(f"[Tuning] {time.time() - t:.1f}s")
 
-    #if config.DO_TUNE:
+    # Extract parameters
+    best_lambda = best_params['lambda']
+    best_gamma = best_params['learning_rate']
+    best_threshold = best_params['optimal_threshold']
+    #...
+
+
 
     #if config.DO_SUBMISSION:
 
