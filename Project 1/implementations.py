@@ -1,6 +1,8 @@
 import numpy as np
 from helpers import *
 
+import config
+
 # -------------- CORE IMPLEMENTATIONS --------------
 
 def mean_squared_error_gd(y, tx, initial_w, max_iters, gamma):
@@ -127,6 +129,25 @@ def compute_gradient(y, tx, w, sgd=False):
 
 # -------------- FURTHER IMPROVEMENTS (ADAM AND ADDITIONAL LOSS FUNCTIONS) --------------
 
+def sigmoid_stable(z):
+    # Sanitization
+    z = np.asarray(z, dtype = np.float64)
+
+    # Initializing output
+    out = np.empty_like(z)
+
+    # Computing indices where z is positive
+    pos = z >= 0
+
+    # Where positive, compute sigmoid (no overflow risk)
+    out[pos]  = 1.0 / (1.0 + np.exp(-z[pos]))
+
+    # Where negative, compute e / (1 + e)
+    ez = np.exp(z[~pos])
+    out[~pos] = ez / (1.0 + ez)
+
+    return out
+
 def class_weights(y):
     """
     Balanced class weights ala N/(2*N_c).
@@ -155,7 +176,7 @@ def weighted_logistic_loss(y, tx, w, alpha_pos = 1.0, alpha_neg = 1.0, lambda_ =
     """
 
     z = tx.dot(w)
-    p = sigmoid(z)
+    p = sigmoid_stable(z)
 
     # Creating per-class weights (vector sized [N,] containing the weight for each sample based on their class)
     a = np.where(y == 1, alpha_pos, alpha_neg).astype(p.dtype)
@@ -175,7 +196,7 @@ def weighted_logistic_gradient(y, tx, w, alpha_pos = 1.0, alpha_neg = 1.0, lambd
     """
     # Computing logits and probabilities
     z = tx.dot(w)
-    p = sigmoid(z)
+    p = sigmoid_stable(z)
 
     # Creating per-class weights
     a = np.where(y == 1, alpha_pos, alpha_neg).astype(p.dtype)
@@ -192,7 +213,7 @@ def focal_logistic_loss(y, tx, w, alpha=0.5, gamma=2.0, lambda_=0.0, eps=1e-10):
     """
     Focal loss (binary). alpha in [0,1]; gamma >= 0.
     """
-    p = sigmoid(tx.dot(w))
+    p = sigmoid_stable(tx.dot(w))
     # pt = p when y=1; pt = 1-p when y=0
     pt = y * p + (1 - y) * (1 - p)
     # alpha weighting by class
@@ -208,7 +229,7 @@ def focal_logistic_gradient(y, tx, w, alpha=0.5, gamma=2.0, lambda_=0.0, eps=1e-
     Gradient of focal loss (binary). Derived w.r.t. logits via chain rule.
     """
     z = tx.dot(w)
-    p = sigmoid(z)
+    p = sigmoid_stable(z)
     pt = y * p + (1 - y) * (1 - p)
     alpha_t = y * alpha + (1 - y) * (1 - alpha)
 
@@ -232,15 +253,10 @@ def focal_logistic_gradient(y, tx, w, alpha=0.5, gamma=2.0, lambda_=0.0, eps=1e-
 
 def adam_logistic(
     y, tx, initial_w, max_iters, gamma = 1e-3, lambda_ = 0.0,
-    # Manual selection of the loss type, might remove later
-    loss_type = "weighted_bce",
     # Weighted BCE params (auto-balance if None)
     alpha_pos = None, alpha_neg = None,
     # Focal params
     focal_alpha = 0.5, focal_gamma = 2.0,
-    # Adam defaults
-    beta_1 = 0.9, beta_2 = 0.999, eps = 1e-8,
-    batch_size = None, seed = 0
 ):
     """
     Adam applied to logistic regression with a pluggable loss:
@@ -248,18 +264,20 @@ def adam_logistic(
       - 'focal'
     Returns (w, unpenalized BCE loss) to match your project reporting.
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(config.RNG_SEED)
     w = np.array(initial_w, dtype=np.float64, copy=True)
 
+    eps = 1e-8
+
     # Initialization of loss and gradient function references
-    if loss_type == "weighted_bce":
+    if config.ADAM_LOSS_TYPE == "weighted_bce":
         if alpha_pos is None or alpha_neg is None:
             alpha_pos, alpha_neg = class_weights(y)
         def loss_function(y_, tx_, w_):
             return weighted_logistic_loss(y_, tx_, w_, alpha_pos, alpha_neg, lambda_)
         def gradient_function(y_, tx_, w_):
             return weighted_logistic_gradient(y_, tx_, w_, alpha_pos, alpha_neg, lambda_)
-    elif loss_type == "focal":
+    elif config.ADAM_LOSS_TYPE == "focal":
         def loss_function(y_, tx_, w_):
             return focal_logistic_loss(y_, tx_, w_, focal_alpha, focal_gamma, lambda_)
         def gradient_function(y_, tx_, w_):
@@ -275,11 +293,11 @@ def adam_logistic(
     # Auxiliary function that generates sample batches
     def next_batch():
         # Case in which entire dataset is used
-        if batch_size is None or batch_size >= len(y):
+        if config.ADAM_BATCH_SIZE is None or config.ADAM_BATCH_SIZE >= len(y):
             return y, tx
 
         # Case in which batches are used
-        idx = rng.choice(len(y), size = batch_size, replace = False)
+        idx = rng.choice(len(y), size = config.ADAM_BATCH_SIZE, replace = False)
         return y[idx], tx[idx]
 
     # Training loop
@@ -294,12 +312,22 @@ def adam_logistic(
         t += 1
 
         # Updating momentum and step size
-        m = beta_1 * m + (1 - beta_1) * g
-        v = beta_2 * v + (1 - beta_2) * (g * g)
+        m = config.ADAM_BETA_1 * m + (1 - config.ADAM_BETA_1) * g
+        v = config.ADAM_BETA_2 * v + (1 - config.ADAM_BETA_2) * (g * g)
 
         # Compensation for zero initialization, useful in early step when m and v are zeros
-        mhat = m / (1 - beta_1 ** t)
-        vhat = v / (1 - beta_2 ** t)
+        mhat = m / (1 - config.ADAM_BETA_1 ** t)
+        vhat = v / (1 - config.ADAM_BETA_2 ** t)
+
+        # Learning rate decay
+        if config.ADAM_LR_DECAY == "sqrt":
+            gamma_t = gamma / np.sqrt(t)
+        elif config.ADAM_LR_DECAY == "exp":
+            gamma_t = gamma * (0.96 ** (t / 100))
+        elif config.ADAM_LR_DECAY == "cos":
+            gamma_t = 0.5 * gamma * (1 + np.cos(np.pi * t / max_iters))
+        else:
+            gamma_t = gamma
 
         # Updating weights
         w -= gamma * mhat / (np.sqrt(vhat) + eps)

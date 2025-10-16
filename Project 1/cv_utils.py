@@ -46,16 +46,15 @@ def cv_train_and_eval(args):
     per_fold_probs, per_fold_idx = [], []
     for (tr_idx, va_idx) in folds:
         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
+
         w, _ = implementations.adam_logistic(
             y_tr_01[tr_idx], X_tr[tr_idx], w0,
-            max_iters=max_iters, gamma=gam, lambda_=lam,
-            loss_type="weighted_bce",  # or "focal"
-            alpha_pos=None, alpha_neg=None,  # None => auto-balanced by class counts
-            focal_alpha=0.5, focal_gamma=2.0,  # used only when loss_type="focal"
-            batch_size=None,  # e.g. 256 if you want mini-batches
-            seed=42
+            max_iters = max_iters, gamma = gam, lambda_ = lam,
+            alpha_pos = None, alpha_neg = None,
+            focal_alpha = 0.5, focal_gamma = 2.0
         )
-        probs_va = implementations.sigmoid(X_tr[va_idx].dot(w))
+
+        probs_va = implementations.sigmoid_stable(X_tr[va_idx].dot(w))
         per_fold_probs.append(probs_va)
         per_fold_idx.append(va_idx)
 

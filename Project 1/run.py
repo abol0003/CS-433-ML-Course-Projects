@@ -163,12 +163,10 @@ def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
 
     w_final, final_loss = implementations.adam_logistic(
         y_tr_01, X_tr, w0,
-        max_iters=config.FINAL_MAX_ITERS,
+        max_iters = config.FINAL_MAX_ITERS,
         gamma=best_gamma, lambda_=best_lambda,
-        loss_type="weighted_bce",    # or "focal"
-        alpha_pos=None, alpha_neg=None,   # auto-balance
-        focal_alpha=0.5, focal_gamma=2.0, # used if focal
-        batch_size=None, seed=config.RNG_SEED
+        alpha_pos=None, alpha_neg=None,
+        focal_alpha=0.5, focal_gamma=2.0
     )
 
     print(f"[Final] loss (unpenalized BCE) = {final_loss:.6f}")
@@ -183,7 +181,7 @@ def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
 
 def make_submission(X_te, w_final, best_thr, test_ids):
     """Generete predications and submission file."""
-    probs_te = implementations.sigmoid(X_te.dot(w_final))
+    probs_te = implementations.sigmoid_stable(X_te.dot(w_final))
     preds01_te = (probs_te >= best_thr).astype(int)
     preds_pm1_te = metrics.to_pm1_labels(preds01_te)
     helpers.create_csv_submission(test_ids, preds_pm1_te, config.OUTPUT_PRED)
