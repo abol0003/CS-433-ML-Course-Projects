@@ -124,12 +124,16 @@ def cross_validate_logistic_regression(y, X, lambda_, gamma, max_iters=config.MA
         
     Returns:
         dict: Cross-validation results containing:
-            - 'lambda_': Regularization parameter
-            - 'gamma': Learning rate used
+            - 'lambda': Regularization parameter
+            - 'learning_rate': Learning rate used
+            - 'max_iters': Maximum iterations used
             - 'optimal_threshold': Best classification threshold
             - 'mean_accuracy': Average accuracy across folds
+            - 'std_accuracy': Standard deviation of accuracy
             - 'mean_precision': Average precision across folds
+            - 'std_precision': Standard deviation of precision
             - 'mean_recall': Average recall across folds
+            - 'std_recall': Standard deviation of recall
             - 'mean_f1': Average F1 score across folds
             - 'std_f1': Standard deviation of F1 across folds
     """
@@ -142,7 +146,7 @@ def cross_validate_logistic_regression(y, X, lambda_, gamma, max_iters=config.MA
     
     for train_idx, val_idx in folds:
         # Initialize weights
-        initial_w = np.zeros(n_features, dtype=np.float64)
+        initial_w = np.zeros(n_features, dtype=np.float64) # put this in config.py ??
         
         # Train model on this fold
         weights, _ = implementations.reg_logistic_regression( 
@@ -188,47 +192,21 @@ def cross_validate_logistic_regression(y, X, lambda_, gamma, max_iters=config.MA
         fold_metrics['recall'].append(recall)
         fold_metrics['f1'].append(f1)
     
-    # Return structured results
+    # Return structured results with all statistics
     return {
         'lambda': float(lambda_),
-        'learning_rate': float(gamma),
+        'gamma': float(gamma),
+        'max_iters': int(max_iters),
         'optimal_threshold': float(optimal_threshold),
         'mean_accuracy': float(np.mean(fold_metrics['accuracy'])),
+        'std_accuracy': float(np.std(fold_metrics['accuracy'])),
         'mean_precision': float(np.mean(fold_metrics['precision'])),
+        'std_precision': float(np.std(fold_metrics['precision'])),
         'mean_recall': float(np.mean(fold_metrics['recall'])),
+        'std_recall': float(np.std(fold_metrics['recall'])),
         'mean_f1': float(np.mean(fold_metrics['f1'])),
         'std_f1': float(np.std(fold_metrics['f1']))
     }
-
-
-# def cv_train_and_eval(args):
-#     y_tr_01, X_tr, folds, lam, gam, max_iters = args
-#     #cross-validation with best threshold found on each fold
-#     per_fold_probs, per_fold_idx = [], []
-#     for (tr_idx, va_idx) in folds:
-#         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-#         w, _ = implementations.reg_logistic_regression(y_tr_01[tr_idx], X_tr[tr_idx], lam, w0, max_iters, gam)
-#         probs_va = implementations.sigmoid(X_tr[va_idx].dot(w))
-#         per_fold_probs.append(probs_va)
-#         per_fold_idx.append(va_idx)
-
-#     va_idx_concat = np.concatenate(per_fold_idx)
-#     probs_concat  = np.concatenate(per_fold_probs)
-#     y_val_concat  = y_tr_01[va_idx_concat]
-#     best_thr, _, _, _ = find_optimal_threshold(y_val_concat, probs_concat)
-#     #evaluate with best_thr on each fold and average ( see slide 4a pg 24)
-#     acc_list, prec_list, rec_list, f1_list = [], [], [], []
-#     for probs_va, va_idx in zip(per_fold_probs, per_fold_idx):
-#         preds = (probs_va >= best_thr).astype(int)
-#         y_va  = y_tr_01[va_idx]
-#         acc_list.append(metrics.accuracy_score(y_va, preds))
-#         p, r, f1 = metrics.precision_recall_f1(y_va, preds)
-#         prec_list.append(p)
-#         rec_list.append(r)
-#         f1_list.append(f1)
-
-#     return (lam, gam, float(best_thr), float(np.mean(acc_list)), float(np.mean(prec_list)),
-#             float(np.mean(rec_list)), float(np.mean(f1_list)))
 
 
 
