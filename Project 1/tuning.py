@@ -44,9 +44,9 @@ def grid_search_cv(X, y, lambda_grid=config.LAMBDA, gamma_grid=config.GAMMA, max
     
     # suppress these prints
     print(f"\n[BEST CV] lambda={best_result['lambda']:.3e}, "
-          f"gamma={best_result['learning_rate']:.3e}, "
+          f"gamma={best_result['gamma']:.3e}, "
           f"threshold={best_result['optimal_threshold']:.3f}")
-    print(f"          F1={best_result['mean_f1']:.4f} (±{best_result['std_f1']:.4f}), "
+    print(f"F1={best_result['mean_f1']:.4f} (±{best_result['std_f1']:.4f}), "
           f"Acc={best_result['mean_accuracy']:.4f} (±{best_result['std_accuracy']:.4f})")
     
     return best_result, results
