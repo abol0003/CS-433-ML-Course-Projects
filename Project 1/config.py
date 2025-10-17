@@ -14,14 +14,17 @@ PICT_DIR = "picture"
 # Paths 
 SAVE_DIR = "data_saving"
 RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
-PREPROC1_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_1.npz")
-PREPROC2_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
+
+#PREPROC1_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_1.npz")
+
+#CHANGE iter the ..._{iter} if changes to not overwrite preproc data you might want to keep 
+PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
 
 #CHANGE iter the ..._{iter} if changes in preproc data (or when needed)
 TUNING_PATH         = os.path.join(SAVE_DIR, "tuning_1.csv") # saves .csv file 
 BEST_PARAM_PATH     = os.path.join(SAVE_DIR, "bestParam_1.csv") # saves .npz file 
 
-SAVE_BEST           = os.path.join(SAVE_DIR, "best_params.npz") # to suppress 
+#SAVE_BEST           = os.path.join(SAVE_DIR, "best_params.npz") # to suppress 
 SAVE_WEIGHTS        = os.path.join(SAVE_DIR, "final_weights.npy") # To not have to retrain the model ??   
 
 #====================================================
