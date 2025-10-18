@@ -35,7 +35,7 @@ def grid_search_cv(X, y, lambda_grid=config.LAMBDA, gamma_grid=config.GAMMA, max
     print(f"[Parallelization] Using {max(1, (os.cpu_count() or 2) - 4)} processes")
     
     # Run parallel cross-validation
-    n_processes = 6 #max(1, (os.cpu_count() or 2) - 4) #Badr: 8 CPUs
+    n_processes = 5 #max(1, (os.cpu_count() or 2) - 4) #Badr: 8 CPUs
     with mp.get_context("spawn").Pool(processes=n_processes) as pool:
         results = pool.starmap(cv_utils.cross_validate_logistic_regression, tasks)
     

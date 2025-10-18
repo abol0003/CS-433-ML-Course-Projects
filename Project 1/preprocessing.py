@@ -321,6 +321,58 @@ def pca():
     return
 
 
+def poly_features():
+    """
+    meh. risk of overfitting ? Give it a try if time allows, especially if combined with PCA 
+    """
+    return 
+
+
+def compute_sample_weights(y_train):
+    """
+    Compute sample weights to handle class imbalance in the dataset.
+    
+    For imbalanced datasets (+1: 91.17%, -1: 8.83%), this assigns higher
+    weights to minority class samples to balance their influence during training.
+    
+    Weight formula for 'balanced' strategy:
+        w_i = n_samples / (n_classes * n_samples_in_class_i)
+    
+    Args:
+        y_train: Training labels array (n_samples,), expected in {-1, +1} or {0, 1} format
+        strategy: Weighting strategy. Options:
+            - 'balanced': Automatically adjust weights inversely proportional to class frequencies
+            - 'uniform': Equal weights for all samples (returns ones)
+    
+    Returns:
+        sample_weights: Array of shape (n_samples,) with weight for each sample
+    """
+    y_train = np.asarray(y_train)
+    n_samples = len(y_train)  
+
+    # Get unique classes and their counts
+    unique_classes, class_counts = np.unique(y_train, return_counts=True)
+    n_classes = len(unique_classes)
+    
+    # Compute weight for each class: n_samples / (n_classes * count_for_class)
+    class_weights = n_samples / (n_classes * class_counts)
+    
+    # Create mapping from class label to weight
+    class_to_weight = dict(zip(unique_classes, class_weights))
+    
+    # Assign weight to each sample based on its class
+    sample_weights = np.array([class_to_weight[label] for label in y_train], 
+                                dtype=np.float32)
+    
+    # Log class distribution and weights
+    print(f"[Class Weighting] Dataset imbalance detected:")
+    for cls, count in zip(unique_classes, class_counts):
+        pct = 100 * count / n_samples
+        weight = class_to_weight[cls]
+        print(f"  Class {cls:+d}: {count:6d} samples ({pct:5.2f}%) -> weight: {weight:.4f}")
+    
+    return sample_weights
+    
 
 
 #==========================================
@@ -359,68 +411,60 @@ def pca():
 #     return Xtr_f, Xte_f
 
 
-def preprocess2(filename=config.PREPROC_DATA_PATH):
+def preprocess2():
     if config.PREPROCESSING:
         Xtr_raw, Xte_raw, ytr_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
 
         Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
         Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
-        print(Xtr_raw.shape([1]))
+        print(Xtr_raw.shape[1])
 
         print("[Preprocess] Step 1: Removing low-validity features...")
         Xtr, Xte = remove_low_validity_features(Xtr_raw, Xte_raw)
-        print(Xtr.shape([1]))
+        print(Xtr.shape[1])
 
         print("[Preprocess] Step 2: Imputing missing values (smart)...")
         Xtr, Xte = smart_impute(Xtr, Xte)
-        print(Xtr.shape([1]))
+        print(Xtr.shape[1])
 
         print("[Preprocess] Step 3: Removing low-variance features...")
         Xtr, Xte = variance_treshold(Xtr, Xte)
-        print(Xtr.shape([1]))
+        print(Xtr.shape[1])
 
         print("[Preprocess] Step 4: Removing highly correlated features...")
         Xtr, Xte = remove_highly_correlated_features(Xtr, Xte, ytr_pm1)
-        print(Xtr.shape([1]))
+        print(Xtr.shape[1])
         
         print("[Preprocess] Step 5: One-hot encoding categorical features...")
         Xtr, Xte = one_hot_encoding(Xtr, Xte)
-        print(Xtr.shape([1]))
+        print(Xtr.shape[1])
 
         print("[Preprocess] Step 6: Standardizing features...")    
         Xtr, Xte = standardize(Xtr, Xte)
-        print(Xtr.shape([1]))
+        print(Xtr.shape[1])
 
         #Xtr, Xte = pca(Xtr, Xte)
 
         print("[Preprocess] Step 7: Adding bias term...")
         Xtr = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
         Xte = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
-        print(Xtr.shape([1]))
+        print(Xtr.shape[1])
 
         ytr_01 = metrics.to_01_labels(ytr_pm1) 
 
-        print(f"[Preprocess] Saving preprocessed data to {filename} ...")
-        save(Xtr, Xte, ytr_01, train_ids, test_ids, filename)
+        print(f"[Preprocess] Saving preprocessed data")
+        save(Xtr, Xte, ytr_01, train_ids, test_ids)
     else:
-        if not os.path.exists(filename):
-            raise FileNotFoundError(f"{filename} not found.")
-        npz = np.load(filename) 
-        Xtr       = npz["X_train"]
-        Xte       = npz["X_test"]
-        ytr_01    = npz["y_train"]
-        train_ids = npz["train_ids"]
-        test_ids  = npz["test_ids"]
-        print(f"[Loaded] Preprocessed data from -> {filename}")
+        Xtr, Xte, ytr_01, train_ids, test_ids = load_preproc_data()
 
-    return Xtr, Xte, ytr_01
+    return Xtr, Xte, ytr_01, train_ids, test_ids
 
 
 #==========================================
 #==========================================
 
 
-def save(Xtr, Xte, ytr, train_ids, test_ids, filename):
+def save(Xtr, Xte, ytr, train_ids, test_ids, filename=config.PREPROC_DATA_PATH):
     np.savez_compressed(
         filename,
         X_train   = Xtr, 
@@ -430,27 +474,18 @@ def save(Xtr, Xte, ytr, train_ids, test_ids, filename):
         test_ids  = test_ids
     )
 
-def load_preproc_data(filepath_npz=config.PREPROC_DATA_PATH): 
+
+def load_preproc_data(filename=config.PREPROC_DATA_PATH): 
     """Load best hyperparameters from disk."""
-    if not os.path.exists(filepath_npz):
-        raise FileNotFoundError(f"{filepath_npz} not found.")
-    
-    npz = np.load(filepath_npz)
-    results = {
-        'lambda': float(npz['lambda_']),
-        'gamma': float(npz['gamma']),
-        'optimal_threshold': float(npz['threshold']),
-        'max_iters': int(npz['max_iters']),
-        'mean_f1': float(npz['mean_f1']),
-        'std_f1': float(npz['std_f1']),
-        'mean_accuracy': float(npz['mean_accuracy']),
-        'std_accuracy': float(npz['std_accuracy']),
-        'mean_precision': float(npz['mean_precision']),
-        'std_precision': float(npz['std_precision']),
-        'mean_recall': float(npz['mean_recall']),
-        'std_recall': float(npz['std_recall'])
-    }
-    
-    return results
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"{filename} not found.")
+    npz = np.load(filename) 
+    Xtr       = npz["X_train"]
+    Xte       = npz["X_test"]
+    ytr_01    = npz["y_train"]
+    train_ids = npz["train_ids"]
+    test_ids  = npz["test_ids"]
+    print(f"[Loaded] Preprocessed data from -> {filename}")
+    return Xtr, Xte, ytr_01, train_ids, test_ids
 
 

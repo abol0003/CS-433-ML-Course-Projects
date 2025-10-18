@@ -30,7 +30,7 @@ def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
         y_tr_01, X_tr, best_lambda, w0, max_iters=config.FINAL_MAX_ITERS, gamma=best_gamma
     )
     print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
-
+    
     np.save(config.SAVE_WEIGHTS, w_final)
     print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
 
@@ -50,7 +50,7 @@ def make_submission(X_te, w_final, best_thr, test_ids):
 def main():
 
     t = time.time()
-    Xtr, Xte, ytr_01 = preprocessing.preprocess2()
+    Xtr, Xte, ytr_01, train_ids, test_ids = preprocessing.preprocess2()
     print(f"[Preprocessing] {time.time() - t:.1f}s")
 
     #==========================================
@@ -58,13 +58,13 @@ def main():
     #seperation of concerns : 1)tuning.py should contain the tuning logic 2) run.py simply orchestrate everything based on config.py
     best_params = tuning.tune(Xtr, ytr_01) 
     print(f"[Tuning] {time.time() - t:.1f}s")
+
     #==========================================
     # Extract parameters
     best_lambda = best_params['lambda']
     best_gamma = best_params['gamma']
     best_threshold = best_params['optimal_threshold']
     #...
-
 
     #Final training + submission
     t = time.time()   
@@ -73,7 +73,7 @@ def main():
         w_final = train_final_model(
             Xtr, ytr_01, best_lambda, best_gamma
         )
-        make_submission(X_te, w_final, best_threshold, test_ids)
+        make_submission(Xte, w_final, best_threshold, test_ids)
         print(f"[TOTAL] {time.time() - t:.1f}s.")
     print(f"[Submission] {time.time() - t:.1f}s")
 

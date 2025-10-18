@@ -73,7 +73,7 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     for epoch in range(max_iters):
         w -= gamma * logistic_gradient(y, tx, w, lambda_=lambda_)
 
-        print(f"[Epoch {epoch+1}/{max_iters}] Loss: {logistic_loss(y, tx, w, lambda_=0):.6f}")
+        #print(f"[Epoch {epoch+1}/{max_iters}] Loss: {logistic_loss(y, tx, w, lambda_=0):.6f}")
     return w, logistic_loss(y, tx, w, lambda_=0)
 
 
