@@ -27,10 +27,10 @@ def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
 
     w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
     w_final, final_loss = implementations.reg_logistic_regression(
-        y_tr_01, X_tr, best_lambda, w0, max_iters=config.FINAL_MAX_ITERS, gamma=best_gamma
+        y_tr_01, X_tr, best_lambda, w0, max_iters=config.MAX_ITERS, gamma=best_gamma
     )
     print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
-    
+
     np.save(config.SAVE_WEIGHTS, w_final)
     print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
 
@@ -50,7 +50,7 @@ def make_submission(X_te, w_final, best_thr, test_ids):
 def main():
 
     t = time.time()
-    Xtr, Xte, ytr_01, train_ids, test_ids = preprocessing.preprocess2()
+    Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights = preprocessing.preprocess2()
     print(f"[Preprocessing] {time.time() - t:.1f}s")
 
     #==========================================
@@ -68,7 +68,7 @@ def main():
 
     #Final training + submission
     t = time.time()   
-    if config.DO_SUBMISSION:
+    if config.SUBMISSION:
         # Enregistre les courbes train/val avec un holdout (run séparé, honnête)
         w_final = train_final_model(
             Xtr, ytr_01, best_lambda, best_gamma

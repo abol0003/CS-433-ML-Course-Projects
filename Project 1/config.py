@@ -15,38 +15,27 @@ PICT_DIR = "picture"
 SAVE_DIR = "data_saving"
 RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
 
-#PREPROC1_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_1.npz")
-
 #CHANGE iter the ..._{iter} if changes to not overwrite preproc data you might want to keep 
-PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_4Upsamp.npz")
+PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_3.npz")
 
 #CHANGE iter the ..._{iter} if changes in preproc data (or when needed)
 TUNING_PATH         = os.path.join(SAVE_DIR, "tuning_2.csv") # saves .csv file 
 BEST_PARAM_PATH     = os.path.join(SAVE_DIR, "bestParam_2.npz") # saves .npz file 
 
-#SAVE_BEST           = os.path.join(SAVE_DIR, "best_params.npz") # to suppress 
 SAVE_WEIGHTS        = os.path.join(SAVE_DIR, "final_weights.npy") # To not have to retrain the model ??   
 
 #====================================================
 # Pipeline
 
-PREPROCESSING     = False    # reuse preprocessed npz if False
-HYPERPARAM_TUNING = True   # tune or load best params 
+PREPROCESSING     = True    # reuse preprocessed npz if False
+HYPERPARAM_TUNING = False   # tune or load best params 
 SUBMISSION        = False   # Train final model, Save weights, Submission file
-
-RNG_SEED = 42
-
 #====================================================
-#Badr Tuning
-# Coarse
+#Tuning
 LAMBDA = [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
 GAMMA = [1e-3, 1e-2, 1e-1, 1]
 MAX_ITERS = 600
-#initial_w = np.zeros(X_train.shape[1])
 
-# Refine
-# LAMBDA = [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
-# GAMMA = [1e-3, 1e-2, 1e-1, 1]
 
 #====================================================
 # Light One-hot Encoding 
@@ -55,12 +44,8 @@ ONEHOT_PER_FEAT_MAX = 8
 MAX_ADDED_ONEHOT    = 120   # Limits the total number of new columns added by encoding
 
 #====================================================
-# Nature of the features (Preproc)
-# Future masks ??
-CAT = [1, 2,  ]             # categorical feature indices
-DISC = [5, 8, 15, 22]       # discrete feature indices
-CONT = [0, 1, 2, 4, 6]      # continuous feature indices
-
-
+K = 250 # for PCA
 EPS = 1e-12 # Avoid division by 0
 N_FOLDS = 5
+
+RNG_SEED = 42

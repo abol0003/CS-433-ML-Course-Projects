@@ -27,27 +27,3 @@ def precision_recall_f1(y_true01, y_pred01):
     recall    = tp / (tp + fn + eps)
     f1        = 2 * precision * recall / (precision + recall + eps)
     return float(precision), float(recall), float(f1)
-
-
-def confusion_matrix(y_true01, y_pred01):
-    y_true01 = np.asarray(y_true01)
-    y_pred01 = np.asarray(y_pred01)
-    tn = np.sum((y_true01 == 0) & (y_pred01 == 0))
-    fp = np.sum((y_true01 == 0) & (y_pred01 == 1))
-    fn = np.sum((y_true01 == 1) & (y_pred01 == 0))
-    tp = np.sum((y_true01 == 1) & (y_pred01 == 1))
-    return np.array([[tn, fp], [fn, tp]], dtype=int)
-
-
-# def split_train_val_stratified(y01, val_fraction=0.2, seed=42):
-#     rng = np.random.RandomState(seed)
-#     pos = np.where(y01 == 1)[0]
-#     neg = np.where(y01 == 0)[0]
-#     rng.shuffle(pos); rng.shuffle(neg) #mix neg and pos separatly to have balanced val
-#     n_pos_val = int(len(pos) * val_fraction)
-#     n_neg_val = int(len(neg) * val_fraction)
-#     val_idx = np.concatenate([pos[:n_pos_val], neg[:n_neg_val]]) #make sure we have the same ratio
-#     rng.shuffle(val_idx)#mix pos and neg again
-#     mask = np.ones(y01.shape[0], dtype=bool); mask[val_idx] = False
-#     train_idx = np.where(mask)[0]
-#     return train_idx, val_idx

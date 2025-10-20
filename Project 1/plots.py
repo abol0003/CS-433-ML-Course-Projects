@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np 
 
 
-def plot_confusion_matrix(cm, path, class_names=("0","1")):
+def heatmap_lambda_gamma(cm, path, class_names=("0","1")):
     fig, ax = plt.subplots()
     ax.imshow(cm, cmap="Blues") 
     ax.set_xticks(np.arange(len(class_names)))

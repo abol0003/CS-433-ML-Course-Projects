@@ -112,7 +112,7 @@ def load_tuning_results(filepath_npz=config.BEST_PARAM_PATH):
     results = {
         'lambda': float(npz['lambda_']),
         'gamma': float(npz['gamma']),
-        'optimal_threshold': float(npz['threshold']),
+        'optimal_threshold': float(npz['optimal_threshold']),
         'max_iters': int(npz['max_iters']),
         'mean_f1': float(npz['mean_f1']),
         'std_f1': float(npz['std_f1']),

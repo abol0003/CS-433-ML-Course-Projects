@@ -317,8 +317,56 @@ def standardize(Xtr_new, Xte_new):
 #==========================================
 
 
-def pca():
-    return
+def pca(Xtr, Xte, n_components=config.K):
+    """
+    Apply Principal Component Analysis (PCA) for dimensionality reduction.
+    
+    PCA transforms features into orthogonal principal components ordered by 
+    variance explained. This can help:
+    - Reduce multicollinearity
+    - Speed up training
+    - Reduce overfitting (regularization effect)
+    - Denoise data
+    
+    Args:
+        Xtr: Training data array (standardized, n_samples x n_features)
+        Xte: Test data array (standardized, n_samples x n_features)
+        n_components: Number of components to keep. If None, uses explained_variance_ratio
+    
+    Returns:
+        Xtr_pca, Xte_pca: Transformed arrays with reduced dimensionality
+    """
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    
+    n_samples, n_features = Xtr.shape
+    
+    # Compute covariance matrix
+    # Use (X^T @ X) / (n-1) for numerical stability
+    cov_matrix = (Xtr.T @ Xtr) / (n_samples - 1)
+    
+    # Compute eigenvalues and eigenvectors
+    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+    
+    # Sort by eigenvalues in descending order
+    idx = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[idx]
+    eigenvectors = eigenvectors[:, idx]
+
+    total_variance = np.sum(eigenvalues)
+    variance_explained = np.sum(eigenvalues[:n_components]) / total_variance
+    
+    print(f"[Preprocess] PCA: keeping {n_components}/{n_features} components "
+            f"(explains {variance_explained*100:.2f}% variance)")
+    
+    # Select top n_components eigenvectors
+    principal_components = eigenvectors[:, :n_components]
+    
+    # Project data onto principal components
+    Xtr_pca = Xtr @ principal_components
+    Xte_pca = Xte @ principal_components
+    
+    return Xtr_pca, Xte_pca
 
 
 def poly_features():
@@ -419,59 +467,65 @@ def preprocess2():
         Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
         print(Xtr_raw.shape[1])
 
-        print("[Preprocess] Step 1: Removing low-validity features...")
+        print("[Preprocess] Removing low-validity features...")
         Xtr, Xte = remove_low_validity_features(Xtr_raw, Xte_raw)
         print(Xtr.shape[1])
 
-        print("[Preprocess] Step 2: Imputing missing values (smart)...")
+        print("[Preprocess] Imputing missing values (smart)...")
         Xtr, Xte = smart_impute(Xtr, Xte)
         print(Xtr.shape[1])
 
-        print("[Preprocess] Step 3: Removing low-variance features...")
+        print("[Preprocess] Removing low-variance features...")
         Xtr, Xte = variance_treshold(Xtr, Xte)
         print(Xtr.shape[1])
 
-        print("[Preprocess] Step 4: Removing highly correlated features...")
+        print("[Preprocess] Removing highly correlated features...")
         Xtr, Xte = remove_highly_correlated_features(Xtr, Xte, ytr_pm1)
         print(Xtr.shape[1])
         
-        print("[Preprocess] Step 5: One-hot encoding categorical features...")
+        print("[Preprocess] One-hot encoding categorical features...")
         Xtr, Xte = one_hot_encoding(Xtr, Xte)
         print(Xtr.shape[1])
 
-        print("[Preprocess] Step 6: Standardizing features...")    
+        print("[Preprocess] Standardizing features...")    
         Xtr, Xte = standardize(Xtr, Xte)
         print(Xtr.shape[1])
 
+        print("[Preprocess] PCA...") 
         #Xtr, Xte = pca(Xtr, Xte)
+        print(Xtr.shape[1])
 
-        print("[Preprocess] Step 7: Adding bias term...")
+        print("[Preprocess] Adding bias term...")
         Xtr = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
         Xte = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
         print(Xtr.shape[1])
 
         ytr_01 = metrics.to_01_labels(ytr_pm1) 
 
+        print("[Preprocess] Computing sample weights for class imbalance...")
+        sample_weights = compute_sample_weights(ytr_pm1)
+
         print(f"[Preprocess] Saving preprocessed data")
-        save(Xtr, Xte, ytr_01, train_ids, test_ids)
+        save(Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights)
     else:
-        Xtr, Xte, ytr_01, train_ids, test_ids = load_preproc_data()
+        Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights = load_preproc_data()
 
-    return Xtr, Xte, ytr_01, train_ids, test_ids
+    return Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights
 
 
 #==========================================
 #==========================================
 
 
-def save(Xtr, Xte, ytr, train_ids, test_ids, filename=config.PREPROC_DATA_PATH):
+def save(Xtr, Xte, ytr, train_ids, test_ids, sample_weights, filename=config.PREPROC_DATA_PATH):
     np.savez_compressed(
         filename,
         X_train   = Xtr, 
         X_test    = Xte, 
         y_train   = ytr,
         train_ids = train_ids, 
-        test_ids  = test_ids
+        test_ids  = test_ids,
+        sample_weights = sample_weights
     )
 
 
@@ -485,7 +539,8 @@ def load_preproc_data(filename=config.PREPROC_DATA_PATH):
     ytr_01    = npz["y_train"]
     train_ids = npz["train_ids"]
     test_ids  = npz["test_ids"]
+    sample_weights = npz["sample_weights"]
     print(f"[Loaded] Preprocessed data from -> {filename}")
-    return Xtr, Xte, ytr_01, train_ids, test_ids
+    return Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights
 
 
