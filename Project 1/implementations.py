@@ -86,7 +86,7 @@ def sigmoid(z):
 
 
 def logistic_loss(y, tx, w, lambda_ = 0):
-    sig = sigmoid(tx.dot(w))
+    sig = sigmoid_stable(tx.dot(w))
     eps = 1e-10
     loss = -np.mean(y * np.log(sig + eps) + (1 - y) * np.log(1 - sig + eps))
     if lambda_ > 0:
@@ -95,7 +95,7 @@ def logistic_loss(y, tx, w, lambda_ = 0):
 
 
 def logistic_gradient(y, tx, w, lambda_=0):
-    grad = tx.T.dot(sigmoid(tx.dot(w)) - y) / len(y)
+    grad = tx.T.dot(sigmoid_stable(tx.dot(w)) - y) / len(y)
     if lambda_ > 0:
         grad += 2 * lambda_ * w
     return grad
@@ -130,6 +130,10 @@ def compute_gradient(y, tx, w, sgd=False):
 # -------------- FURTHER IMPROVEMENTS (ADAM AND ADDITIONAL LOSS FUNCTIONS) --------------
 
 def sigmoid_stable(z):
+    """
+    A numerically stable implementation of the sigmoid function.
+    """
+
     # Sanitization
     z = np.asarray(z, dtype = np.float64)
 
@@ -147,6 +151,25 @@ def sigmoid_stable(z):
     out[~pos] = ez / (1.0 + ez)
 
     return out
+
+def l2_ex_bias(w):
+    """
+    L2 decay applied to all weights but the bias
+    """
+
+    # L2 on all but the bias term
+    return (w[1:] ** 2).sum()
+
+def l2_grad_ex_bias(w):
+    """
+    Gradient of the L2 decay applied to all weights but the bias
+    """
+
+    # Gradient of the L2 decay function
+    g = np.zeros_like(w)
+    g[1:] = 2.0 * w[1:]
+
+    return g
 
 def class_weights(y):
     """
@@ -186,7 +209,7 @@ def weighted_logistic_loss(y, tx, w, alpha_pos = 1.0, alpha_neg = 1.0, lambda_ =
 
     # L2 penalty
     if lambda_ > 0:
-        loss += lambda_ * np.sum(w**2)
+        loss += lambda_ * l2_ex_bias(w)
 
     return loss
 
@@ -206,7 +229,7 @@ def weighted_logistic_gradient(y, tx, w, alpha_pos = 1.0, alpha_neg = 1.0, lambd
 
     # L2 penalty
     if lambda_ > 0:
-        grad += 2.0 * lambda_ * w
+        grad += lambda_ * l2_grad_ex_bias(w)
     return grad
 
 def focal_logistic_loss(y, tx, w, alpha=0.5, gamma=2.0, lambda_=0.0, eps=1e-10):
@@ -330,7 +353,7 @@ def adam_logistic(
             gamma_t = gamma
 
         # Updating weights
-        w -= gamma * mhat / (np.sqrt(vhat) + eps)
+        w -= gamma_t * mhat / (np.sqrt(vhat) + eps)
 
     # Computing loss value
     loss = loss_function(y, tx, w)
