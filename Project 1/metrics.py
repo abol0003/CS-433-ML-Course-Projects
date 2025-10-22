@@ -1,35 +1,82 @@
-# Metrics and label conversion functions 
 import numpy as np
 
 
 def to_01_labels(y_pm1):
+    """
+    Convert labels from {-1, 1} format to {0, 1} format.
+
+    Args:
+        y_pm1: Array of labels in {-1, 1} format.
+
+    Returns:
+        Array of labels in {0, 1} format.
+    """
     return (y_pm1 > 0).astype(np.uint8)
 
 
 def to_pm1_labels(y01):
+    """
+    Convert labels from {0, 1} format to {-1, 1} format.
+
+    Args:
+        y01: Array of labels in {0, 1} format.
+
+    Returns:
+        Array of labels in {-1, 1} format.
+    """
     return np.where(y01 == 1, 1, -1).astype(np.int32)
 
 
 def accuracy_score(y_true01, y_pred01):
+    """
+    Compute classification accuracy.
+
+    Args:
+        y_true01: True labels in {0, 1} format.
+        y_pred01: Predicted labels in {0, 1} format.
+
+    Returns:
+        Accuracy as a float value.
+    """
     y_true01 = np.asarray(y_true01)
     y_pred01 = np.asarray(y_pred01)
     return float(np.mean(y_true01 == y_pred01))
 
 
 def precision_recall_f1(y_true01, y_pred01):
-    eps=1e-12 ## to put in config.py !! (EPS = 1e-12 # safeguard Avoid division by 0)
+    """
+    Compute precision, recall, and F1 score for binary classification.
+
+    Args:
+        y_true01: True labels in {0, 1} format.
+        y_pred01: Predicted labels in {0, 1} format.
+
+    Returns:
+        Tuple of (precision, recall, f1), each as a float.
+    """
+    eps = 1e-12
     y_true01 = np.asarray(y_true01)
     y_pred01 = np.asarray(y_pred01)
     tp = np.sum((y_true01 == 1) & (y_pred01 == 1))
     fp = np.sum((y_true01 == 0) & (y_pred01 == 1))
     fn = np.sum((y_true01 == 1) & (y_pred01 == 0))
     precision = tp / (tp + fp + eps)
-    recall    = tp / (tp + fn + eps)
-    f1        = 2 * precision * recall / (precision + recall + eps)
+    recall = tp / (tp + fn + eps)
+    f1 = 2 * precision * recall / (precision + recall + eps)
     return float(precision), float(recall), float(f1)
 
 
 def confusion_matrix(y_true01, y_pred01):
+    """
+    Compute the 2x2 confusion matrix for binary classification.
+
+    Args:
+        y_true01: True labels in {0, 1} format.
+        y_pred01: Predicted labels in {0, 1} format.
+
+    Returns:
+        A 2x2 numpy array [[TN, FP], [FN, TP]].
+    """
     y_true01 = np.asarray(y_true01)
     y_pred01 = np.asarray(y_pred01)
     tn = np.sum((y_true01 == 0) & (y_pred01 == 0))
@@ -37,17 +84,3 @@ def confusion_matrix(y_true01, y_pred01):
     fn = np.sum((y_true01 == 1) & (y_pred01 == 0))
     tp = np.sum((y_true01 == 1) & (y_pred01 == 1))
     return np.array([[tn, fp], [fn, tp]], dtype=int)
-
-
-# def split_train_val_stratified(y01, val_fraction=0.2, seed=42):
-#     rng = np.random.RandomState(seed)
-#     pos = np.where(y01 == 1)[0]
-#     neg = np.where(y01 == 0)[0]
-#     rng.shuffle(pos); rng.shuffle(neg) #mix neg and pos separatly to have balanced val
-#     n_pos_val = int(len(pos) * val_fraction)
-#     n_neg_val = int(len(neg) * val_fraction)
-#     val_idx = np.concatenate([pos[:n_pos_val], neg[:n_neg_val]]) #make sure we have the same ratio
-#     rng.shuffle(val_idx)#mix pos and neg again
-#     mask = np.ones(y01.shape[0], dtype=bool); mask[val_idx] = False
-#     train_idx = np.where(mask)[0]
-#     return train_idx, val_idx

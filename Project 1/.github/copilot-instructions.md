@@ -1,5 +1,8 @@
 # Copilot Instructions for Project 1
 
+Purpose: Enable AI agents to be productive in this ML repo (CS-433 Project 1) by capturing the actual architecture, workflows, and conventions used in code.
+# Copilot Instructions for Project 1
+
 Purpose: Make AI agents effective in this ML repo (CS‑433 Project 1) by capturing the actual architecture, workflows, and conventions used in code.
 
 ## Big picture

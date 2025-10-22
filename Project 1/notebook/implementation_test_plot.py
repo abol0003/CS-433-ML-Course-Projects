@@ -186,7 +186,9 @@ def _compute_fold_loss_curve(args):
     """Worker: compute loss/F1 curves for one fold."""
     k, tr_idx, va_idx, X, y01, gamma, lambda_, max_iters = args
     
-    def _sigmoid(z):
+    def sigmoid(z):
+        # clip for numerical stability
+        z = np.clip(z, -30, 30)
         return 1.0 / (1.0 + np.exp(-z))
 
     def _logistic_loss_unreg(Xm, y, w):
