@@ -2,6 +2,8 @@
 import numpy as np 
 import metrics
 import implementations
+import config
+
 
 # simple LR schedules (callables): lr = schedule(lr0, t, T)
 def schedule_none(lr0, t, T):
@@ -27,7 +29,7 @@ def stratified_kfold_indices(y01, n_splits=5, seed=42): # %val=1/n_splits
     folds = []
     for k in range(n_splits):
         va_idx = np.concatenate([pos_splits[k], neg_splits[k]])
-        rng.shuffle(va_idx)  #mix pos and neg again
+        rng.shuffle(va_idx)  # mix pos and neg again
         mask = np.ones(y.shape[0], dtype=bool)
         mask[va_idx] = False
         tr_idx = np.where(mask)[0]
@@ -41,12 +43,12 @@ def best_threshold_by_f1(y_true01, scores):
     order = np.argsort(-s)
     y = y[order]; s_sorted = s[order]
     P = np.sum(y == 1)
-    #vectorized computation of precision/recall/f1
+    # vectorized computation of precision/recall/f1
     tps = np.cumsum(y == 1)
     fps = np.cumsum(y == 0)
-    precision = tps / (tps + fps + 1e-12)
-    recall    = tps / (P + 1e-12)
-    f1        = 2 * precision * recall / (precision + recall + 1e-12)
+    precision = tps / (tps + fps)
+    recall    = tps / (P )
+    f1        = 2 * precision * recall / (precision + recall )
     k = int(np.argmax(f1))
     best_thr = s_sorted[k]               
     return float(best_thr), float(precision[k]), float(recall[k]), float(f1[k])
@@ -73,24 +75,43 @@ def cv_train_and_eval(args):
         schedule = schedule_exponential
     else:
         schedule = None
-    #cross-validation with best threshold found on each fold
+    # cross-validation with best threshold found on each fold
     per_fold_probs, per_fold_idx = [], []
     for (tr_idx, va_idx) in folds:
         w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-        w, _ = implementations.reg_logistic_regression(
-            y_tr_01[tr_idx],
-            X_tr[tr_idx],
-            lam,
-            w0,
-            max_iters,
-            gam,
-            adam=use_adam,
-            schedule=schedule,
-            early_stopping=early_stopping,
-            patience=patience,
-            tol=tol,
-            verbose=False,
-        )
+        if config.NAGFREE_TUNING:
+            # ===== NAG-Free optimizer (no gamma/schedule) =====
+            # NB: returned loss is unpenalized (consistent with the rest of the pipeline).
+            w, _ = implementations.reg_logistic_regression_nagfree(
+                y_tr_01[tr_idx],
+                X_tr[tr_idx],
+                lam,
+                w0,
+                max_iters=max_iters,
+                tol=tol if tol > 0 else getattr(config, "TOL_DEFAULT", 1e-8),
+                L_max=getattr(config, "NAGFREE_L_MAX", 1e8),
+                verbose=False,
+                val_data=(y_tr_01[va_idx], X_tr[va_idx]),
+            )
+        else:
+            # ===== Adam/GD route + optional schedule =====
+            # early_stopping only makes sense in this branch (existing implementation)
+            w, _ = implementations.reg_logistic_regression(
+                y_tr_01[tr_idx],
+                X_tr[tr_idx],
+                lam,
+                w0,
+                max_iters=max_iters,
+                gamma=gam,
+                adam=bool(use_adam),
+                schedule=schedule,
+                early_stopping=bool(early_stopping),
+                patience=patience,
+                tol=tol if tol > 0 else getattr(config, "TOL_DEFAULT", 1e-8),
+                verbose=False,
+                val_data=(y_tr_01[va_idx], X_tr[va_idx]) if early_stopping else None,
+            )
+
         probs_va = implementations.sigmoid(X_tr[va_idx].dot(w))
         per_fold_probs.append(probs_va)
         per_fold_idx.append(va_idx)
@@ -99,7 +120,7 @@ def cv_train_and_eval(args):
     probs_concat  = np.concatenate(per_fold_probs)
     y_val_concat  = y_tr_01[va_idx_concat]
     best_thr, _, _, _ = best_threshold_by_f1(y_val_concat, probs_concat)
-    #evaluate with best_thr on each fold and average ( see slide 4a pg 24)
+    # evaluate with best_thr on each fold and average ( see slide 4a pg 24)
     acc_list, prec_list, rec_list, f1_list = [], [], [], []
     for probs_va, va_idx in zip(per_fold_probs, per_fold_idx):
         preds = (probs_va >= best_thr).astype(int)
@@ -112,6 +133,5 @@ def cv_train_and_eval(args):
 
     return (lam, gam, float(best_thr), float(np.mean(acc_list)), float(np.mean(prec_list)),
             float(np.mean(rec_list)), float(np.mean(f1_list)))
-
 
 

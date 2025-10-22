@@ -2,6 +2,9 @@ import numpy as np
 import config
 from helpers import *
 
+# Last training metadata (read-only for callers)
+EARLY_STOP_META = {"triggered": False, "iter": None, "best_loss": None, "monitor": None}
+
 
 def mean_squared_error_gd(y, tx, initial_w, max_iters, gamma):
     "hey"
@@ -98,23 +101,22 @@ def reg_logistic_regression(
     initial_w,
     max_iters,
     gamma,
-    display=False,
     adam=True,
     schedule=None,
     early_stopping=False,
     patience=10,
-    tol=1e-6,
+    tol=1e-3,
     verbose=False,
     callback=None,
+    val_data=None,
 ):
     """Regularized logistic regression (L2) with options for Adam, LR schedule, and early stopping.
 
     Extras (backward-compatible):
     - If config.USE_WEIGHTED_BCE is True, use class-balanced weights in the BCE gradient
       (alpha_pos = N/(2*N_pos), alpha_neg = N/(2*N_neg)). Penalty stays as lambda * sum(w**2).
-    - Signature unchanged; behavior controlled via config only.
+    - Early stopping se base sur la validation loss si val_data est fourni.
     """
-    rng = np.random.RandomState(config.RNG_SEED)
     w = initial_w.astype(np.float32, copy=True)
 
     # Adam buffers (used if adam=True)
@@ -127,27 +129,46 @@ def reg_logistic_regression(
     wait = 0
 
     n = y.size
-    if (verbose or display):
+    if (verbose):
         print(
             f"[Train] adam={adam} schedule={'on' if schedule else 'none'} early_stop={early_stopping} "
             f"lambda={lambda_:.3e} gamma={gamma:.3e} iters={max_iters}"
         )
 
     # Optional class-balanced weighting (no API change: toggled via config)
-    use_weighted = getattr(config, "USE_WEIGHTED_BCE", False)
+    use_weighted = config.USE_WEIGHTED_BCE
     if use_weighted:
         # y expected in {0,1}
         n_pos = float(np.sum(y))
         n_tot = float(y.size)
         n_neg = n_tot - n_pos
         # avoid division by zero in extreme edge-cases
-        a_pos = n_tot / (2.0 * max(1.0, n_pos))
-        a_neg = n_tot / (2.0 * max(1.0, n_neg))
+        a_pos = n_tot / (4.0 * max(1.0, n_pos))
+        a_neg = n_tot / (1.0 * max(1.0, n_neg))
         w_samp = (y * a_pos + (1.0 - y) * a_neg).astype(np.float32, copy=False)
         denom_w = float(np.sum(w_samp))
     else:
         w_samp = None
         denom_w = float(y.size)
+
+    # Unpack optional validation data if provided
+    if val_data is not None:
+        y_val, X_val = val_data
+        y_val = np.asarray(y_val)
+        X_val = np.asarray(X_val)
+    else:
+        y_val, X_val = None, None
+
+    # Monitoring mode for early stopping: prefer val if provided, else train
+    monitor_kind = "val" if (y_val is not None) else "train"
+    best_iter = 0
+    if early_stopping and (y_val is None or X_val is None):
+        if verbose:
+            print("[EarlyStop] val_data not provided; falling back to training loss as monitor.")
+
+    # Reset global metadata
+    global EARLY_STOP_META
+    EARLY_STOP_META = {"triggered": False, "iter": None, "best_loss": None, "monitor": monitor_kind}
 
     for t in range(1, max_iters + 1):
         lr = schedule(gamma, t - 1, max_iters) if schedule else gamma
@@ -175,33 +196,108 @@ def reg_logistic_regression(
         else:
             w = w - lr * g_reg
 
-        # Monitor unpenalized (unweighted) loss for consistency with evaluation
-        cur_loss = logistic_loss(y, tx, w, lambda_=0)
+        # Compute training loss for logging/callback
+        cur_train_loss = logistic_loss(y, tx, w, lambda_=0)
+        # Monitor strictly the validation loss when early_stopping is enabled
+        cur_monitor_loss = (
+            logistic_loss(y_val, X_val, w, lambda_=0) if (y_val is not None) else cur_train_loss
+        )
         if callback is not None:
             try:
-                callback(t, w, float(cur_loss), float(lr))
+                callback(t, w, float(cur_train_loss), float(lr))
             except Exception:
                 pass
 
-        if early_stopping:
-            if cur_loss + tol < best_loss:
-                best_loss = cur_loss
+        if early_stopping and t>150:  # wait at least 50 iters
+            if cur_monitor_loss + 1e-2 < best_loss:
+                best_loss = cur_monitor_loss
                 best_w = w.copy()
+                best_iter = t
                 wait = 0
             else:
                 wait += 1
                 if wait >= patience:
-                    if verbose or display:
-                        print(f"[EarlyStop] iter={t} best_loss={best_loss:.6f}")
+                    if verbose:
+                        print(f"[EarlyStop] iter={t} best_monitor={best_loss:.6f}{' (val)' if y_val is not None else ' (train)'}")
                     w = best_w
+                    # persist early-stop info
+                    EARLY_STOP_META.update({
+                        "triggered": True,
+                        "iter": int(best_iter),
+                        "best_loss": float(best_loss),
+                        "monitor": monitor_kind,
+                    })
                     break
 
-        if (verbose or display) and (t % max(1, max_iters // 10) == 0):
+        if (verbose) and (t % max(1, max_iters // 10) == 0):
             pen = logistic_loss(y, tx, w, lambda_=lambda_)
-            print(f"[Iter {t}/{max_iters}] unpen={cur_loss:.6f} pen={pen:.6f}")
+            print(
+                f"[Iter {t}/{max_iters}] train_unpen={cur_train_loss:.6f} monitor={'val' if y_val is not None else 'train'}"
+                f"={cur_monitor_loss:.6f} pen={pen:.6f}"
+            )
 
     final_loss = logistic_loss(y, tx, w, lambda_=0)
+    # If no break occurred, still record the best seen (or last) iteration
+    if early_stopping and EARLY_STOP_META["iter"] is None:
+        last_monitor = logistic_loss(y_val, X_val, w, lambda_=0) if y_val is not None else final_loss
+        EARLY_STOP_META.update({
+            "triggered": False,
+            "iter": int(best_iter if best_iter > 0 else t),
+            "best_loss": float(best_loss if np.isfinite(best_loss) else last_monitor),
+            "monitor": monitor_kind,
+        })
     return w, final_loss
+# --- NAG-Free wrapper: use NAG-Free as a standalone optimizer, not a scheduler.
+def reg_logistic_regression_nagfree(
+    y,
+    tx,
+    lambda_,
+    initial_w,
+    max_iters,
+    tol=1e-8,
+    L_max=None,
+    verbose=False,
+    callback=None,
+    val_data=None,
+):
+    """
+    Entraîne une régression logistique L2 en utilisant l'optimiseur NAG-Free.
+    Attention: NAG-Free pilote lui-même pas à pas (pas de gamma/schedule).
+    """
+    # On attend une implémentation NAG-Free dans `extensions.py` (cf. doc)
+    try:
+        from extensions import nagfree  # ta version "améliorée" décrite dans NAG_FREE_IMPROVEMENTS.md
+    except ImportError as e:
+        raise ImportError(
+            "NAG-Free non trouvé. Assure-toi d'avoir un fichier extensions.py avec nagfree(...)."
+        ) from e
+
+    w0 = np.asarray(initial_w, dtype=np.float32, copy=True)
+
+    # gradient pénalisé L2 (même convention que reg_logistic_regression)
+    def grad_fn(w):
+        p = sigmoid(tx.dot(w))
+        grad = tx.T.dot(p - y) / y.size
+        grad += 2.0 * lambda_ * w
+        return grad
+
+    # Optionnel: fonction de perte *non pénalisée* pour monitor/debug (cohérent avec les retours actuels)
+    def loss_fn(w):
+        return logistic_loss(y, tx, w, lambda_=0)
+
+    # Appel NAG-Free (il gère lr/momentum/estimation Lk)
+    w_final = nagfree(
+        x0=w0,
+        g=grad_fn,
+        maxit=int(max_iters),
+        tol=float(tol),
+        L_max=float(L_max if L_max is not None else getattr(config, "NAGFREE_L_MAX", 1e8)),
+        track_history=False,
+        disable_tqdm=True,
+    )
+
+    final_loss = logistic_loss(y, tx, w_final, lambda_=0)
+    return w_final, final_loss
 
 
 
@@ -209,7 +305,9 @@ def reg_logistic_regression(
 
 
 def sigmoid(z):
-    return 1 / (1 + np.exp(-z))
+    # clip for numerical stability
+    z = np.clip(z, -30, 30)
+    return 1.0 / (1.0 + np.exp(-z))
 
 
 def logistic_loss(y, tx, w, lambda_=0):
@@ -218,35 +316,7 @@ def logistic_loss(y, tx, w, lambda_=0):
     loss = -np.mean(y * np.log(sig + eps) + (1 - y) * np.log(1 - sig + eps))
     if lambda_ > 0:
         loss += lambda_ * np.sum(w**2)
-        # Do not penalize bias term
-        #loss += lambda_ * np.sum(w[1:] ** 2)
     return loss
-
-
-def class_weights(y):
-    """Return class-balanced weights (alpha_pos, alpha_neg) for y in {0,1}.
-    alpha_c = N / (2 * N_c)."""
-    n_pos = float(np.sum(y))
-    n_tot = float(y.size)
-    n_neg = n_tot - n_pos
-    a_pos = n_tot / (2.0 * max(1.0, n_pos))
-    a_neg = n_tot / (2.0 * max(1.0, n_neg))
-    return a_pos, a_neg
-
-
-def weighted_logistic_loss(y, tx, w, weights, lambda_=0):
-    """Weighted BCE loss with optional L2 penalty over all weights (bias included).
-    - y in {0,1}, weights >= 0 with shape (N,)
-    - Normalizes by sum(weights) to be scale-invariant"""
-    sig = sigmoid(tx.dot(w))
-    eps = 1e-12
-    weights = weights.astype(np.float64, copy=False)
-    denom = np.sum(weights) if np.ndim(weights) == 1 else float(len(y))
-    # weighted average
-    loss = -np.sum(weights * (y * np.log(sig + eps) + (1 - y) * np.log(1 - sig + eps))) / max(1e-12, denom)
-    if lambda_ > 0:
-        loss += lambda_ * np.sum(w**2)
-    return float(loss)
 
 
 def logistic_gradient(y, tx, w, lambda_=0):
