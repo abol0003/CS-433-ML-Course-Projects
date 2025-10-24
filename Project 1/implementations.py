@@ -2,6 +2,7 @@ import numpy as np
 from helpers import *
 
 import config
+import cv_utils
 
 # -------------- CORE IMPLEMENTATIONS --------------
 
@@ -280,15 +281,17 @@ def adam_logistic(
     alpha_pos = None, alpha_neg = None,
     # Focal params
     focal_alpha = 0.5, focal_gamma = 2.0,
+    # Early stopping
+    val_data = None, early_stop = None
 ):
     """
     Adam applied to logistic regression with a pluggable loss:
       - 'weighted_bce' (default) or
       - 'focal'
-    Returns (w, unpenalized BCE loss) to match your project reporting.
+    Returns (w, unpenalized BCE loss)
     """
     rng = np.random.default_rng(config.RNG_SEED)
-    w = np.array(initial_w, dtype=np.float64, copy=True)
+    w = np.array(initial_w, dtype = np.float64, copy = True)
 
     eps = 1e-8
 
@@ -313,6 +316,11 @@ def adam_logistic(
     v = np.zeros_like(w)
     t = 0
 
+    # Initialization of auxiliary variables
+    best_w = w.copy()
+    best_score = -np.inf
+    no_improve = 0
+
     # Auxiliary function that generates sample batches
     def next_batch():
         # Case in which entire dataset is used
@@ -321,7 +329,22 @@ def adam_logistic(
 
         # Case in which batches are used
         idx = rng.choice(len(y), size = config.ADAM_BATCH_SIZE, replace = False)
+
         return y[idx], tx[idx]
+
+    # Auxiliary function that evaluates the F1 score of given weight
+    def eval_fold_score(w_eval):
+        # If no val set, skip
+        if val_data is None:
+            return None
+
+        Xv, yv = val_data
+        pv = sigmoid_stable(Xv.dot(w_eval))
+
+        # find per-fold best F1 threshold (proxy for generalization)
+        thr, _, _, f1 = cv_utils.best_threshold_by_f1(yv, pv)
+
+        return f1
 
     # Training loop
     for _ in range(max_iters):
@@ -355,6 +378,27 @@ def adam_logistic(
         # Updating weights
         w -= gamma_t * mhat / (np.sqrt(vhat) + eps)
 
+        # Early stop
+        if early_stop is not None:
+            # Case in which current time step is a verification step
+            if t % int(early_stop.get("check_every", 50)) == 0:
+                # Evaluating the score of current weight
+                score = eval_fold_score(w)
+                # Case in which the F1 score has improved
+                if score is not None and score > best_score + 1e-8:
+                    best_score = score
+                    best_w = w.copy()
+                    no_improve = 0
+                # Case in which F1 score has not improved
+                else:
+                    no_improve += 1
+                    # If F1 score has not improved in some time, do early stop
+                    if no_improve >= int(early_stop.get("patience", 10)):
+                        # Rollback to best weight found
+                        w = best_w
+                        break
+
     # Computing loss value
     loss = loss_function(y, tx, w)
+
     return w, loss

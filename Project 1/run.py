@@ -104,73 +104,148 @@ def preprocess_data():
 
 
 def tune_hyperparameter(X_tr, y_tr_01, folds):
+    """
+    Execute multiple training with different parameters, using k-fold as CV technique.
+    The best hyperparameters are then stored (or loaded from memory)
+    """
+
+    # Caching execution start time
     t_tune = time.time()
 
-    if config.DO_TUNE:       
-        # Random search over log-uniform grid ( better for computational cost )
+    # Execute CV to find best hyperparameters
+    if config.DO_TUNE:
+
+        # Random search over log-uniform grid (better for computational cost)
         lambda_samples = sample_loguniform(config.LAMBDA_LOW, config.LAMBDA_HIGH, config.N_TRIALS)
         gamma_samples  = sample_loguniform(config.GAMMA_LOW,  config.GAMMA_HIGH,  config.N_TRIALS)
 
-        tasks = [(y_tr_01, X_tr, folds, lam, gam, config.TUNING_MAX_ITERS)
-                for lam, gam in zip(lambda_samples, gamma_samples)]
+        # Possible ADAM configurations
+        LOSS_CHOICES = ["weighted_bce", "focal"]
+        BATCH_CHOICES = [None, 1024, 512, 256]
+        FOCAL_ALPHAS = [0.25, 0.5, 0.75]
+        FOCAL_GAMMAS = [1.0, 2.0, 3.0]
 
+        # Initializing the tasks configurations array
+        tasks = []
+
+        # Iterating all pairs of index matching lambda and gamma
+        for lam, gam in zip(lambda_samples, gamma_samples):
+            # Iterating all ADAM loos possibility
+            for loss in LOSS_CHOICES:
+                # Using Weighted BCE loss function
+                if loss == "weighted_bce":
+                    tasks.append((y_tr_01, X_tr, folds, lam, gam, config.TUNING_MAX_ITERS, loss, None, None, None))
+                # Using Focal loss function
+                if loss ==  "focal":
+                    # Iterating all focal gamma and alphas
+                    for fa in FOCAL_ALPHAS:
+                        for fg in FOCAL_GAMMAS:
+                            tasks.append((y_tr_01, X_tr, folds, lam, gam, config.TUNING_MAX_ITERS, loss, fa, fg, None))
+
+        # Expanding batch sizes (final None above will be replaced per batch choice)
+        tasks = [t[:-1] + (bsize,) for t in tasks for bsize in BATCH_CHOICES]
+
+        # Obtaining the amount of cores available on the machine
         nproc = max(1, (os.cpu_count() or 2) - 1)
-        with mp.get_context("spawn").Pool(processes=nproc) as pool:
+        # Generating the threads pool
+        with mp.get_context("spawn").Pool(processes = nproc) as pool:
             results = pool.map(cv_utils.cv_train_and_eval, tasks)
 
+        # Finding the best iteration and storing its parameters
         best = None
-        for (lam, gam, thr, acc, prec, rec, f1) in results:
+        for (lam, gam, thr, acc, prec, rec, f1, loss, bsize, fa, fg) in results:
             if (best is None) or (f1 > best[-1]):
-                best = (lam, gam, thr, acc, prec, rec, f1)
+                best = (lam, gam, thr, acc, prec, rec, f1, loss, bsize, fa, fg)
 
-        best_lambda, best_gamma, best_thr, val_acc, val_prec, val_rec, val_f1 = best
-        print(f"[BEST-CV] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
-            f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
+        # Printing and storing best found parameters
+        (best_lambda, best_gamma, best_thr,
+         val_acc, val_prec, val_rec, val_f1,
+         best_loss, best_bsize, best_fa, best_fg) = best
+
+        print(f"[BEST-CV] λ = {best_lambda:.3e}, γ = {best_gamma:.3e}, thr = {best_thr:.3f}, "
+              f"loss = {best_loss}, batch = {best_bsize}, fa = {best_fa}, fg = {best_fg}, "
+              f"ACC = {val_acc:.4f}, P = {val_prec:.4f}, R = {val_rec:.4f}, F1 = {val_f1:.4f}")
 
         np.savez(
             config.SAVE_BEST,
-            lambda_=best_lambda, gamma=best_gamma, thr=best_thr,
-            acc=val_acc, prec=val_prec, rec=val_rec, f1=val_f1
+            lambda_ = best_lambda, gamma = best_gamma, thr = best_thr,
+            acc = val_acc, prec = val_prec, rec = val_rec, f1 = val_f1,
+            loss = best_loss, batch = best_bsize, focal_alpha = best_fa, focal_gamma = best_fg
         )
         print(f"[Saved] Best params -> {config.SAVE_BEST}")
 
+        # Printing execution time
+        print(f"[Hyperparameter Tuning] {time.time() - t_tune:.1f}s")
+
+        return best_lambda, best_gamma, best_thr, best_loss, best_bsize, best_fa, best_fg
+
+    # Loading hyperparameters from memory
     else:
+        # Sanity check
         if not os.path.exists(config.SAVE_BEST):
             raise FileNotFoundError(f"{config.SAVE_BEST} not found.")
+
+        # Loading
         npz = np.load(config.SAVE_BEST, allow_pickle=False)
         best_lambda = float(npz["lambda_"])
-        best_gamma  = float(npz["gamma"])
-        best_thr    = float(npz["thr"])
-        val_acc     = float(npz["acc"])
-        val_prec    = float(npz["prec"])
-        val_rec     = float(npz["rec"])
-        val_f1      = float(npz["f1"])
+        best_gamma = float(npz["gamma"])
+        best_thr = float(npz["thr"])
+        val_acc = float(npz["acc"])
+        val_prec = float(npz["prec"])
+        val_rec = float(npz["rec"])
+        val_f1 = float(npz["f1"])
+
+        # --- NEW: optional fields with backward-compat ---
+        loss_loaded = (npz["loss"].item()
+                       if "loss" in npz.files else config.ADAM_LOSS_TYPE)
+
+        batch_loaded = int(npz["batch"].item()) if "batch" in npz.files else config.ADAM_BATCH_SIZE
+        batch_loaded = None if (batch_loaded == -1) else batch_loaded
+
+        focal_alpha_loaded = float(npz["focal_alpha"].item()) if "focal_alpha" in npz.files else None
+        focal_gamma_loaded = float(npz["focal_gamma"].item()) if "focal_gamma" in npz.files else None
+        if focal_alpha_loaded is not None and focal_alpha_loaded < 0:
+            focal_alpha_loaded = None
+        if focal_gamma_loaded is not None and focal_gamma_loaded < 0:
+            focal_gamma_loaded = None
+
         print(f"[Loaded] Best params from -> {config.SAVE_BEST}")
-        print(f"[BEST] lambda={best_lambda:.3e}, gamma={best_gamma:.3e}, thr={best_thr:.3f}, "
-          f"ACC={val_acc:.4f}, P={val_prec:.4f}, R={val_rec:.4f}, F1={val_f1:.4f}")
-    
-    print(f"[Hyperparameter Tuning] {time.time() - t_tune:.1f}s")
-    return best_lambda, best_gamma, best_thr
+        print(f"[BEST] lambda = {best_lambda:.3e}, gamma = {best_gamma:.3e}, thr = {best_thr:.3f}, "
+              f"ACC = {val_acc:.4f}, P = {val_prec:.4f}, R = {val_rec:.4f}, F1 = {val_f1:.4f}, "
+              f"loss = {loss_loaded}, batch = {batch_loaded}, "
+              f"fa = {focal_alpha_loaded}, fg = {focal_gamma_loaded}")
+
+        return best_lambda, best_gamma, best_thr, loss_loaded, batch_loaded, focal_alpha_loaded, focal_gamma_loaded
 
 
-def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
+def train_final_model(
+    X_tr, y_tr_01, best_lambda, best_gamma,
+    loss_type=None, batch_size=None, focal_alpha=None, focal_gamma=None
+):
     t_final = time.time()
-
     w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
+
+    # Temporarily overriding config for final fit
+    old_loss, old_batch = config.ADAM_LOSS_TYPE, config.ADAM_BATCH_SIZE
+    if loss_type is not None:  config.ADAM_LOSS_TYPE  = loss_type
+    if batch_size is not None: config.ADAM_BATCH_SIZE = batch_size
 
     w_final, final_loss = implementations.adam_logistic(
         y_tr_01, X_tr, w0,
-        max_iters = config.FINAL_MAX_ITERS,
+        max_iters=config.FINAL_MAX_ITERS,
         gamma=best_gamma, lambda_=best_lambda,
         alpha_pos=None, alpha_neg=None,
-        focal_alpha=0.5, focal_gamma=2.0
+        focal_alpha=(focal_alpha if focal_alpha is not None else 0.5),
+        focal_gamma=(focal_gamma if focal_gamma is not None else 2.0),
+        # if you added early stopping, keep val_data=None here for full fit
     )
+
+    # Restoring config
+    config.ADAM_LOSS_TYPE, config.ADAM_BATCH_SIZE = old_loss, old_batch
 
     print(f"[Final] loss (unpenalized BCE) = {final_loss:.6f}")
     np.save(config.SAVE_WEIGHTS, w_final)
-
     print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
-
     print(f"[Final Training] {time.time() - t_final:.1f}s")
 
     return w_final
@@ -200,10 +275,15 @@ def main():
 
     _, va_idx= folds[0]  #for final eval only
 
-    best_lambda, best_gamma, best_thr = tune_hyperparameter(X_tr, y_tr_01, folds)
+    best_lambda, best_gamma, best_thr, best_loss, best_bsize, best_fa, best_fg \
+        = tune_hyperparameter(X_tr, y_tr_01, folds)
 
     if config.DO_SUBMISSION:
-        w_final = train_final_model(X_tr, y_tr_01, best_lambda, best_gamma)
+        w_final = train_final_model(
+            X_tr, y_tr_01, best_lambda, best_gamma,
+            loss_type = best_loss, batch_size = best_bsize,
+            focal_alpha = best_fa, focal_gamma = best_fg
+        )
         make_submission(X_te, w_final, best_thr, test_ids)
 
         # validation metrics & plots using the final model
