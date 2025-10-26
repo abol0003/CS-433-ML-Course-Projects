@@ -16,7 +16,7 @@ SAVE_DIR = "data_saving"
 RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
 
 #CHANGE iter the ..._{iter} if changes to not overwrite preproc data you might want to keep 
-PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_3.npz")
+PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
 
 #CHANGE iter the ..._{iter} if changes in preproc data (or when needed)
 TUNING_PATH         = os.path.join(SAVE_DIR, "tuning_2.csv") # saves .csv file 
