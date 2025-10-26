@@ -13,8 +13,6 @@ import implementations
 import config 
 import preprocessing 
 import metrics 
-import plots
-import cv_utils
 import tuning
 
 os.makedirs(config.PICT_DIR, exist_ok=True)
@@ -48,7 +46,6 @@ def make_submission(X_te, w_final, best_thr, test_ids):
 
 
 def main():
-
     t = time.time()
     Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights = preprocessing.preprocess2()
     print(f"[Preprocessing] {time.time() - t:.1f}s")

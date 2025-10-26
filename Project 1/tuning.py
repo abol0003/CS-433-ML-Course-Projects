@@ -51,6 +51,7 @@ def grid_search_cv(X, y, lambda_grid=config.LAMBDA, gamma_grid=config.GAMMA, max
     
     return best_result, results
 
+#==========================================
 
 def save_tuning_results(results, results_list, filepath_npz=config.BEST_PARAM_PATH, filepath_csv=config.TUNING_PATH):
     """
@@ -201,6 +202,7 @@ def tune(X, y):
     Returns:
         dict: Best hyperparameters
     """
+
     if config.HYPERPARAM_TUNING:
         best_result, results_list = grid_search_cv(X, y)
         save_tuning_results(best_result, results_list)
