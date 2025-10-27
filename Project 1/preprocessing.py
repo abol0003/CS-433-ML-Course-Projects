@@ -1,533 +1,1168 @@
-# Preprocessing functions
 import numpy as np
-import os 
 import config
 import metrics
 import helpers
+import os 
 
 
+def replace_brfss_special_codes(X):
+    """Normalize BRFSS special codes and convert obvious weight/height encodings.
 
-def remove_low_validity_features(Xtr, Xte, threshold=0.05):
-    # Shoudld we remove even more ???
+    - 4-digit codes: 7777/9999 -> NaN, 8888 -> 0
+    - 3-digit codes: 777/999 -> NaN, 888/555 -> 0
+    - 2-digit codes: 77/99 -> NaN, 88 -> 0
+    - Weight-like columns: (9000, 9999) encode weight in lbs offset by 9000 -> subtract and convert to kg*? (apply 2.20462 factor).
+    - Height-like columns: values in [200, 711] encode ft'in -> convert to cm.
     """
-    Remove features with less than a specified percentage of valid (non-NaN) data.
-    
-    Args:
-        Xtr: Training data array
-        Xte: Test data array
-        threshold: Minimum percentage of valid data required to keep a feature (default: 0.05 = 5%)
-    
-    Returns:
-        Xtr, Xte: Filtered arrays with only features that have sufficient valid data
-    """
-    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
-    Xte = np.array(Xte, dtype=np.float32, copy=True)
-    
-    n_samples = Xtr.shape[0]
-    cols_to_keep = []
-    
-    for j in range(Xtr.shape[1]):
-        col = Xtr[:, j]
-        valid_count = np.sum(~np.isnan(col))
-        valid_ratio = valid_count / n_samples
-        
-        if valid_ratio > threshold:
-            cols_to_keep.append(j)
-    
-    cols_to_keep = np.array(cols_to_keep, dtype=int)
-    
-    print(f"[Preprocess] remove low-validity features: kept {len(cols_to_keep)}/{Xtr.shape[1]} cols (threshold: {threshold*100:.1f}% valid data)")
-    
-    return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
-
+    X = np.array(X, dtype=np.float32, copy=True)
+    for j in range(X.shape[1]):
+        x = X[:, j] 
+        l = 0
+        if np.sum((x > 9000) & (x < 9999)) >= 400:
+            l = 1 if np.sum(x < 200) > 10 else 2
+        if np.isin(x, [7777.0, 8888.0, 9999.0]).any():
+            x = np.where(x == 7777.0, np.nan, x)
+            x = np.where(x == 9999.0, np.nan, x)
+            x = np.where(x == 8888.0, 0.0, x)
+        elif np.isin(x, [777.0, 888.0, 999.0, 555.0]).any():
+            x = np.where(x == 777.0, np.nan, x)
+            x = np.where(x == 999.0, np.nan, x)
+            x = np.where(x == 888.0, 0.0, x)
+            x = np.where(x == 555.0, 0.0, x)
+        elif np.isin(x, [77.0, 88.0, 99.0]).any():
+            x = np.where(x == 77.0, np.nan, x)
+            x = np.where(x == 99.0, np.nan, x)
+            x = np.where(x == 88.0, 0.0, x)
+        if l == 1:
+            x = np.where((x > 9000.0) & (x < 9999.0), x - 9000.0 * 2.20462, x)
+        elif l == 2:
+            m = (x >= 200.0) & (x <= 711.0)
+            if np.any(m):
+                ft = (x // 100.0)
+                inch = (x % 100.0)
+                x = np.where(m, ft * 30.48 + inch * 2.54, x)
+        X[:, j] = x
+    return X
 
 #==========================================
 
+def is_integer_array(v, tol=1e-6):
+    """Return True if all non-NaN values are within a tolerance of an integer.
 
-def mean_impute(Xtr, Xte): ## DANGER: has to be the fist step in preproc pipeline if use of CAT, DISC, CONT
-    """
-    Replace NaN values in Xtr and Xte with the mean of each column (0 if all NaN in a column, based on Xtr).
-    """
-    col_mean = np.nanmean(Xtr, axis=0)
-    col_mean = np.where(np.isnan(col_mean), 0.0, col_mean)
-    nan_idx_tr = np.where(np.isnan(Xtr))
-    nan_idx_te = np.where(np.isnan(Xte))
-    Xtr[nan_idx_tr] = np.take(col_mean, nan_idx_tr[1])
-    Xte[nan_idx_te] = np.take(col_mean, nan_idx_te[1])
-    return Xtr, Xte
-
-
-def smart_impute(Xtr, Xte):
-    """
-    Smart imputation based on feature distribution characteristics (check viz in viz_eda.ipynb). 
-    Uses median for skewed distributions, mean for normal, and mode for discrete/categorical.
-    
     Args:
-        Xtr: Training data array
-        Xte: Test data array
-    
+        v (np.ndarray): Input vector.
+        tol (float): Numerical tolerance.
+
     Returns:
-        Xtr, Xte: Imputed arrays
+        bool: True if all non-NaN values are near integers.
     """
-    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
-    Xte = np.array(Xte, dtype=np.float32, copy=True)
-    
-    for j in range(Xtr.shape[1]):
-        col = Xtr[:, j]
-        valid_mask = ~np.isnan(col) # boolean array
-        
-        if not np.any(valid_mask):
-            # All NaNs, fill with 0
-            fill_value = 0.0
-        else:
-            valid_vals = col[valid_mask] #
-            n_unique = len(np.unique(valid_vals))
-            
-            # Check if discrete/categorical (few unique values)
-            # Maybe there are discrete features with over 10 values... (Need to check that)
-            if n_unique <= 10:
-                # Use mode (most frequent value)
-                unique, counts = np.unique(valid_vals, return_counts=True)
-                fill_value = unique[np.argmax(counts)] # select most frequent value
-            else:
-                # Check skewness for continuous features
-                mean_val = np.mean(valid_vals)
-                median_val = np.median(valid_vals)
-                
-                # If mean and median differ significantly, distribution is skewed
-                if abs(mean_val - median_val) > 0.5 * np.std(valid_vals):
-                    # Use median for skewed distributions
-                    fill_value = median_val
+    v = v[~np.isnan(v)]
+    if v.size == 0:
+        return False
+    return np.all(np.abs(v - np.round(v)) < tol)
+
+
+def infer_feature_types(X, max_unique_cat=None):
+    """Infer coarse types: binary, nominal, ordinal, continuous.
+
+    Heuristics: 2 unique values to binary; low-card integer-ish to ordinal;
+    other low-card to nominal; remaining to continuous.
+
+    Args:
+        X (np.ndarray): Data matrix.
+        max_unique_cat (int, optional): Max unique values for low-card detection.
+
+    Returns:
+        dict: {"binary", "nominal", "ordinal", "continuous"} → list of column indices.
+    """
+    if max_unique_cat is None:
+        max_unique_cat = config.LOW_CARD_MAX_UNIQUE
+    _, d = X.shape
+    types = {"binary": [], "nominal": [], "ordinal": [], "continuous": []}
+    for j in range(d):
+        col = X[:, j]
+        v = col[~np.isnan(col)]
+        if v.size == 0:
+            types["nominal"].append(j)
+            continue
+        uniq = np.unique(v)
+        nunique = uniq.size
+        if nunique == 2 and set(np.round(uniq).tolist()).issubset({0, 1}):
+            types["binary"].append(j)
+            continue
+        if nunique <= max_unique_cat:
+            if is_integer_array(v):
+                umin, umax = int(np.min(uniq)), int(np.max(uniq))
+                if (umax - umin) <= 6:
+                    types["ordinal"].append(j)
                 else:
-                    # Use mean for approximately normal distributions
-                    fill_value = mean_val
-        
-        # Apply imputation
-        nan_idx_tr = np.isnan(Xtr[:, j])
-        nan_idx_te = np.isnan(Xte[:, j])
-        Xtr[nan_idx_tr, j] = fill_value
-        Xte[nan_idx_te, j] = fill_value
-    
-    return Xtr, Xte
+                    types["nominal"].append(j)
+            else:
+                types["nominal"].append(j)
+            continue
+        types["continuous"].append(j)
+    return types
 
+
+def smart_impute(
+    Xtr, Xte,
+    skew_rule=0.5,
+    allnan_fill_cont=0.0,
+    allnan_fill_nom=-1.0,
+    allnan_fill_bin=0.0,
+):
+    """Impute missing values using robust, simple rules.
+
+    - Categorical (binary/nominal/ordinal): mode, with per-family fallbacks when fully missing.
+    - Continuous: median if mean/median differ relative to std (skew_rule), else mean.
+    - Unit-interval ordinal-like with few levels are treated as continuous.
+
+    Args:
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        skew_rule (float): Controls when to prefer median over mean for continuous columns.
+        allnan_fill_cont (float): Fallback for continuous columns with only missing values.
+        allnan_fill_nom (float): Fallback for nominal or ordinal columns with only missing values.
+        allnan_fill_bin (float): Fallback for binary columns with only missing values.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Imputed training and test matrices.
+    """
+    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
+    Xte = np.array(Xte, dtype=np.float32, copy=True)
+    n, d = Xtr.shape
+    assert Xte.shape[1] == d
+
+    types = infer_feature_types(Xtr, max_unique_cat=config.LOW_CARD_MAX_UNIQUE)
+    cont_set = set(types["continuous"])
+
+    for j in range(d):
+        v = Xtr[:, j]
+        w = v[~np.isnan(v)]
+        if w.size == 0:
+            continue
+        w_min, w_max = float(np.min(w)), float(np.max(w))
+        if (w_min >= -1e-6) and (w_max <= 1.0 + 1e-6):
+            nunique = np.unique(np.round(w, 6)).size
+            if 3 <= nunique <= 7:
+                cont_set.add(j)
+
+    is_cont = np.zeros(d, dtype=bool)
+    if cont_set:
+        is_cont[list(cont_set)] = True
+
+    fam_bin = [j for j in types["binary"] if not is_cont[j]]
+    fam_nom = [j for j in types["nominal"] if not is_cont[j]]
+    fam_ord = [j for j in types["ordinal"] if not is_cont[j]]
+    fam_cont = sorted(list(cont_set))
+
+    fill_vals = np.empty(d, dtype=np.float32)
+
+    for _, idxs, fallback in (
+        ("binary", fam_bin, allnan_fill_bin),
+        ("nominal", fam_nom, allnan_fill_nom),
+        ("ordinal", fam_ord, allnan_fill_nom),
+    ):
+        for j in idxs:
+            w = Xtr[:, j][~np.isnan(Xtr[:, j])]
+            if w.size == 0:
+                fill_vals[j] = float(fallback)
+            else:
+                vals, counts = np.unique(w, return_counts=True)
+                winners = np.where(counts == counts.max())[0]
+                fill_vals[j] = float(vals[winners].min())
+
+    for j in fam_cont:
+        w = Xtr[:, j][~np.isnan(Xtr[:, j])]
+        if w.size == 0:
+            fill_vals[j] = float(allnan_fill_cont)
+        else:
+            mean_val = float(np.mean(w))
+            median_val = float(np.median(w))
+            std_val = float(np.std(w)) + 1e-12
+            prefer_median = abs(mean_val - median_val) > float(skew_rule) * std_val
+            fill_vals[j] = median_val if prefer_median else mean_val
+
+    nan_tr = np.isnan(Xtr)
+    nan_te = np.isnan(Xte)
+    if nan_tr.any():
+        Xtr[nan_tr] = np.take(fill_vals, np.where(nan_tr)[1])
+    if nan_te.any():
+        Xte[nan_te] = np.take(fill_vals, np.where(nan_te)[1])
+
+    return Xtr, Xte
 
 #==========================================
 
-
-def filter_constant_and_nan_columns(Xtr, Xte):
-    """Return indices of non-constant and non-NA-only columns."""
-    cols = []
-    for j in range(Xtr.shape[1]):
-        col = Xtr[:, j]
-        valid = ~np.isnan(col)
-        if not np.any(valid):
-            continue
-        vals = col[valid]
-        if np.all(vals == vals[0]):
-            continue
-        cols.append(j)
-    col_keep = np.array(cols, dtype=int)
-    return Xtr[:, col_keep], Xte[:, col_keep] 
-
-
-def one_hot_encoding(Xtr, Xte): # Does it really do something ???? 
-                                # Why don't we OneHotEncode all columns that meets the requirements => require to check how complete them (to avoid too many new columns -- why would it undesired?)
-                                # OR use randomness to choose which columns we choose to OneHotEncode 
-                                # OR Check the nature of the feature directly (hand-picking -- might be the most efficient ?)  
-    """
-    Performs limited one-hot encoding on low-cardinality columns (=have a small number of different possible values) of the input feature matrices (Xtr, Xte).
-
-    For each column in Xtr and Xte:
-        - If the column has a small number of unique values (as defined by config.LOW_CARD_MAX_UNIQUE),
-        and the total number of new columns does not exceed config.MAX_ADDED_ONEHOT,
-        create new binary columns for each unique value (except the last one).
-        - Each new column indicates whether the original value matches a specific category.
-        - Columns with too many unique values or exceeding the cap are left unchanged.
+def one_hot_encoding_selected(
+    Xtr, Xte, cat_idx,
+    drop_first=True,
+    total_cap=None,
+):
+    """One-hot encode selected categorical columns with baseline drop and capacity control.
 
     Args:
-        Xtr : array-like, shape (n_samples_train, n_features)
-            Training feature matrix.
-        Xte : array-like, shape (n_samples_test, n_features)
-            Test feature matrix.
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        cat_idx (list[int]): Indices of categorical columns to encode.
+        drop_first (bool): If True, drop the most frequent level as baseline.
+        total_cap (int or None): Global cap on the number of added dummy columns.
 
     Returns:
-        Xtr_new : ndarray
-            Transformed training matrix with one-hot encoded columns added.
-        Xte_new : ndarray
-            Transformed test matrix with one-hot encoded columns added.
-        keep_idx : list of int
-            Indices of columns that were kept in their original form.
-        used_idx : list of int
-            Indices of columns that were one-hot encoded.
-        plan : list of tuples
-            Encoding plan, each tuple contains (column index, values encoded).
+        tuple: (Xtr_new, Xte_new, plan, keep_idx, dummy_map)
     """
     Xtr = np.asarray(Xtr)
     Xte = np.asarray(Xte)
     n_tr, d = Xtr.shape
-    assert Xte.shape[1] == d # sanity check
+    assert Xte.shape[1] == d
+
+    if total_cap is None:
+        total_cap = config.MAX_ADDED_ONEHOT
 
     new_tr_cols, new_te_cols = [], []
-    used_idx = []
-    plan = []
-    added = 0
+    used_idx, plan = [], []
+    dummy_map = {}
+    added_total = 0
 
-    for j in range(d):
+    for j in cat_idx:
         col_tr = Xtr[:, j]
-        valid = ~np.isnan(col_tr)
-        if not np.any(valid):
-            continue
-        uniq = np.unique(col_tr[valid])
-        if uniq.shape[0] <= config.LOW_CARD_MAX_UNIQUE:
-            uniq_capped = uniq[:min(len(uniq), config.ONEHOT_PER_FEAT_MAX)]
-            k_add = max(len(uniq_capped) - 1, 0)
-            if added + k_add > config.MAX_ADDED_ONEHOT:
-                continue
-            values_to_encode = uniq_capped[:-1]
-            if values_to_encode.size > 0:
-                used_idx.append(j)
-                plan.append((j, values_to_encode))
-                added += k_add
-                col_te = Xte[:, j]
-                for v in values_to_encode:
-                    new_tr_cols.append((col_tr == v).astype(np.float32))
-                    new_te_cols.append((col_te == v).astype(np.float32))
+        col_te = Xte[:, j]
 
-    keep_idx = [j for j in range(d) if j not in used_idx]
+        valid_tr = ~np.isnan(col_tr)
+        if np.any(valid_tr):
+            uniq, counts = np.unique(col_tr[valid_tr], return_counts=True)
+            order = np.argsort(-counts)
+            uniq = uniq[order]
+        else:
+            uniq = np.array([], dtype=col_tr.dtype)
+
+        kept_all = uniq
+
+        baseline = None
+        kept_for_ohe = kept_all
+        if drop_first and kept_all.size > 0:
+            baseline = float(kept_all[0])
+            kept_for_ohe = kept_all[1:]
+
+        values_to_encode = kept_for_ohe.tolist()
+        values_to_encode.append(np.nan)
+
+        k_add = len(values_to_encode)
+        if (total_cap is not None) and (added_total + k_add > int(total_cap)):
+            continue
+
+        used_idx.append(j)
+        plan.append((j, {
+            "kept_values": [float(x) for x in kept_all.tolist()],
+            "baseline": (None if baseline is None else float(baseline)),
+        }))
+
+        tr_isnan = np.isnan(col_tr)
+        te_isnan = np.isnan(col_te)
+
+        for v in values_to_encode:
+            if (isinstance(v, float) and np.isnan(v)) or (v is np.nan):
+                new_tr_cols.append(tr_isnan)
+                new_te_cols.append(te_isnan)
+            else:
+                new_tr_cols.append((col_tr == v))
+                new_te_cols.append((col_te == v))
+
+        added_total += k_add
+        dummy_map[j] = []
+
+    keep_idx = [jj for jj in range(d) if jj not in used_idx]
     Xtr_keep, Xte_keep = Xtr[:, keep_idx], Xte[:, keep_idx]
+
     if new_tr_cols:
         Xtr_new = np.column_stack([Xtr_keep] + new_tr_cols)
         Xte_new = np.column_stack([Xte_keep] + new_te_cols)
+
+        base = Xtr_keep.shape[1]
+        cursor = base
+        k_per_feat = []
+        for (j, meta) in plan:
+            k_feat = len(meta["kept_values"])
+            if drop_first and meta["baseline"] is not None and k_feat > 0:
+                k_feat -= 1
+            k_feat += 1
+            k_per_feat.append(k_feat)
+
+        for (j, meta), k in zip(plan, k_per_feat):
+            dummy_map[j] = list(range(cursor, cursor + k))
+            cursor += k
     else:
         Xtr_new, Xte_new = Xtr_keep, Xte_keep
 
-    
-    print(f"[Preprocess] one-hot: kept {len(keep_idx)} raw cols, "
-        f"encoded {len(used_idx)} cols, plan size={sum(len(v) for _, v in plan)}")
+    print(f"[Preprocess] one-hot:"
+          f" kept_raw={len(keep_idx)}"
+          f", encoded_feat={len(used_idx)}"
+          f", added_cols={sum(len(v) for v in dummy_map.values())}"
+          f", drop_first={drop_first}"
+          f", total_cap={total_cap}")
 
-    return Xtr_new, Xte_new
- 
- 
+    return Xtr_new , Xte_new , plan, keep_idx, dummy_map
+
 #==========================================
 
-
-def variance_treshold(Xtr, Xte, threshold=0.01): #DANGER: This step must be before standardize ! caveat: for continuous feature, variance can be much higher.. 
-    #for on-hoz encoded features: variance is always <= 0.25
-    """
-    Remove features (columns) with variance below the given threshold.
-    Assumes missing values have already been imputed.
+def remove_highly_correlated_continuous(Xtr, Xte, cont_idx, y_train, threshold=0.90):
+    """Prune highly correlated continuous features, favoring target-aligned and higher-variance columns.
 
     Args:
-        Xtr: Training data array 
-        Xte: Test data array 
-        threshold: Minimum variance required to keep a feature (default: 0.01)
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        cont_idx (array-like): Indices of continuous features to consider.
+        y_train (np.ndarray): Targets used to guide tie-breaking.
+        threshold (float): Absolute correlation threshold for pruning.
 
     Returns:
-        Xtr_new, Xte_new: Arrays with low-variance features removed
+        tuple: (Xtr_new, Xte_new, dropped_indices, kept_indices)
     """
-    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
-    Xte = np.array(Xte, dtype=np.float32, copy=True)
-    variances = np.var(Xtr, axis=0)
-    cols_to_keep = np.where(variances >= threshold)[0]
-
-    print(f"[Preprocess] variance threshold: kept {len(cols_to_keep)}/{Xtr.shape[1]} cols (threshold: {threshold})")
-
-    return Xtr[:, cols_to_keep], Xte[:, cols_to_keep]
-
-
-def remove_highly_correlated_features(Xtr, Xte, y_train, threshold=0.90):
-    """
-    Correlation-based feature selection to remove highly correlated features.
-    For each pair of features with correlation >= threshold, keeps the one that:
-    1) Has higher correlation with target (y_train)
-    2) If tied, has less missing data (from x_train_raw)
-    3) If still tied, has higher variance
-    
-    Args:
-        Xtr: Training data array (already preprocessed/imputed)
-        Xte: Test data array (already preprocessed/imputed)
-        y_train: Target labels for training data
-        threshold: Correlation threshold for considering features as highly correlated (default: 0.90)
-    
-    Returns:
-        Xtr_new, Xte_new: Arrays with highly correlated features removed
-    """
-   
-    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
-    Xte = np.array(Xte, dtype=np.float32, copy=True)
-    
-    n_features = Xtr.shape[1]
-    
-    # Correlation matrix 
-    corr_matrix = np.corrcoef(Xtr, rowvar=False)
-    
-    # Correlation with target
-    target_corr = np.zeros(n_features)
-    for j in range(n_features):
-        target_corr[j] = abs(np.corrcoef(Xtr[:, j], y_train)[0, 1])
-    
-    # Variances
-    variances = np.var(Xtr, axis=0)
-    
-    # Find highly correlated pairs
-    features_to_remove = set()
-    
-    for i in range(n_features):
-        if i in features_to_remove:
-            continue # skips the rest of current loop
-            
-        for j in range(i + 1, n_features):
-            if j in features_to_remove:
+    Xtr = np.ascontiguousarray(np.asarray(Xtr, dtype=np.float32))
+    Xte = np.ascontiguousarray(np.asarray(Xte, dtype=np.float32))
+    y = np.asarray(y_train, dtype=np.float32).ravel()
+    cont_idx = np.asarray(cont_idx, dtype=int)
+    if cont_idx.size <= 1:
+        print(f"[Preprocess] corr prune (continuous): nothing to do (n_cont={cont_idx.size}).")
+        kept = list(range(Xtr.shape[1]))
+        return Xtr, Xte, [], kept
+    Xc = Xtr[:, cont_idx]
+    if np.isnan(Xc).any():
+        raise ValueError("NaNs in continuous block. Impute or standardize before pruning.")
+    corr = np.corrcoef(Xc, rowvar=False)
+    y_center = y - y.mean()
+    Xc_center = Xc - Xc.mean(axis=0, keepdims=True)
+    denom = (np.sqrt((Xc_center**2).sum(axis=0)) * np.sqrt((y_center**2).sum()))
+    tgt_corr = np.zeros(Xc.shape[1], dtype=np.float32)
+    nz = denom > 0
+    tgt_corr[nz] = np.abs((Xc_center[:, nz].T @ y_center) / denom[nz])
+    variances = Xc.var(axis=0)
+    keep_local = np.ones(Xc.shape[1], dtype=bool)
+    D = Xc.shape[1]
+    for i in range(D):
+        if not keep_local[i]:
+            continue
+        high = np.abs(corr[i, (i + 1):]) >= threshold
+        if not high.any():
+            continue
+        js = np.where(high)[0] + (i + 1)
+        for j in js:
+            if not keep_local[j]:
                 continue
-            
-            if abs(corr_matrix[i, j]) >= threshold:
-                # Decide which feature to remove
-                # Criterion 1: Higher correlation with target
-                if target_corr[i] > target_corr[j]:
-                    features_to_remove.add(j)
-                elif target_corr[j] > target_corr[i]:
-                    features_to_remove.add(i)
+            ti, tj = tgt_corr[i], tgt_corr[j]
+            if ti > tj:
+                keep_local[j] = False
+            elif tj > ti:
+                keep_local[i] = False
+            else:
+                if variances[i] >= variances[j]:
+                    keep_local[j] = False
                 else:
-                    # Criterion 2: Higher variance
-                    if variances[i] > variances[j]:
-                        features_to_remove.add(j)
-                    else:
-                        features_to_remove.add(i)
-    
-    features_to_keep = [i for i in range(n_features) if i not in features_to_remove]
-    
-    print(f"[Preprocess] correlation-based selection: removed {len(features_to_remove)} features "
-          f"(threshold: {threshold}), kept {len(features_to_keep)}/{n_features} cols")
-
-    return Xtr[:, features_to_keep], Xte[:, features_to_keep]
-
+                    keep_local[i] = False
+    cont_keep_idx = cont_idx[keep_local]
+    cont_drop_idx = cont_idx[~keep_local]
+    keep_global = np.ones(Xtr.shape[1], dtype=bool)
+    keep_global[cont_drop_idx] = False
+    Xtr_new = Xtr[:, keep_global]
+    Xte_new = Xte[:, keep_global]
+    print(f"[Preprocess] corr prune (continuous): thr={threshold} → dropped {cont_drop_idx.size} / kept {cont_keep_idx.size} continuous (final D={Xtr_new.shape[1]})")
+    return Xtr_new, Xte_new, cont_drop_idx.tolist(), np.where(keep_global)[0].tolist()
 
 #==========================================
 
+def pca_local_on_ohe(Xtr, Xte, dummy_map, cfg=None):
+    """Apply PCA independently within each one-hot block to reduce dimensionality.
 
-def standardize(Xtr_new, Xte_new):
-    mean_tr = np.mean(Xtr_new, axis=0).astype(np.float32) 
-    std_tr  = np.std(Xtr_new, axis=0).astype(np.float32)
-    std_tr  = np.where(std_tr == 0, 1.0, std_tr) # avoid division by 0 -- safe guard as we already removed constant columns
-    Xtr_s = (Xtr_new - mean_tr) / std_tr
-    Xte_s = (Xte_new - mean_tr) / std_tr # can't use test stats to standardize! 
+    PCA is fit on training data per block and applied to the matched columns in test.
+    You can replace original dummy columns or append the components.
+
+    Args:
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        dummy_map (dict[int, list[int]]): Mapping from source categorical feature to its one-hot column indices.
+        cfg (dict or float or int or None): Configuration for variance target, fixed components, minimum block size, and replacement behavior.
+
+    Returns:
+        tuple: (Xtr_out, Xte_out, spec) with projection metadata and component indices.
+    """
+    Xtr = np.asarray(Xtr, np.float32)
+    Xte = np.asarray(Xte, np.float32)
+
+    if cfg is None:
+        cfg = config.PCA_Local
+    if cfg is None or cfg is False:
+        return Xtr, Xte, {"groups": {}, "total_k": 0}
+
+    if isinstance(cfg, (float, int)):
+        cfg = {"variance_ratio": float(cfg)}
+    vr = float(np.clip(cfg.get("variance_ratio", 0.90), 0.0, 1.0)) if "n_components" not in cfg else None
+    k_fixed = cfg.get("n_components", None)
+    min_cols = int(cfg.get("min_cols", 6))
+    replace = bool(cfg.get("replace", True))
+
+    groups = {int(j): list(map(int, idxs)) for j, idxs in dummy_map.items() if len(idxs) >= min_cols}
+    if not groups:
+        return Xtr, Xte, {"groups": {}, "total_k": 0}
+
+    keep_mask = np.ones(Xtr.shape[1], dtype=bool)
+    proj_tr_list, proj_te_list = [], []
+    spec_groups = {}
+    total_k = 0
+
+    for j, cols in groups.items():
+        cols = np.array(cols, dtype=int)
+        Xtr_blk = Xtr[:, cols]
+        Xte_blk = Xte[:, cols]
+
+        mean_tr = np.mean(Xtr_blk, axis=0, dtype=np.float64)
+        Xtr_c = (Xtr_blk - mean_tr) 
+        Xte_c = (Xte_blk - mean_tr) 
+
+        _, S, Vt = np.linalg.svd(Xtr_c, full_matrices=False)
+        n_samples = Xtr_c.shape[0]
+        explained_var = (S ** 2) / max(n_samples - 1, 1)
+        explained_ratio = explained_var / np.sum(explained_var)
+
+        k_max = Vt.shape[0]
+        if k_fixed is not None:
+            k = int(min(max(int(k_fixed), 1), k_max))
+        else:
+            cumsum = np.cumsum(explained_ratio)
+            k = int(np.searchsorted(cumsum, vr, side="left") + 1)
+
+        comps = Vt[:k, :].T 
+        Ztr = Xtr_c @ comps
+        Zte = Xte_c @ comps
+
+        spec_groups[j] = {
+            "cols": cols.tolist(),
+            "k": int(k),
+            "mean": mean_tr ,
+            "components": comps,
+            "explained_ratio": explained_ratio[:k] ,
+        }
+        total_k += k
+
+        if replace:
+            keep_mask[cols] = False
+        proj_tr_list.append(Ztr)
+        proj_te_list.append(Zte)
+
+    if replace:
+        Xtr_out = np.column_stack([Xtr[:, keep_mask]] + proj_tr_list) if proj_tr_list else Xtr
+        Xte_out = np.column_stack([Xte[:, keep_mask]] + proj_te_list) if proj_te_list else Xte
+
+        base = int(keep_mask.sum())
+        pca_idx_cursor = base
+        for j in groups.keys():
+            k = int(spec_groups[j]["k"])
+            spec_groups[j]["pca_component_idx"] = list(range(pca_idx_cursor, pca_idx_cursor + k))
+            pca_idx_cursor += k
+    else:
+        Xtr_out = np.column_stack([Xtr] + proj_tr_list) if proj_tr_list else Xtr
+        Xte_out = np.column_stack([Xte] + proj_te_list) if proj_te_list else Xte
+
+        base = Xtr.shape[1]
+        pca_idx_cursor = base
+        for j in groups.keys():
+            k = int(spec_groups[j]["k"])
+            spec_groups[j]["pca_component_idx"] = list(range(pca_idx_cursor, pca_idx_cursor + k))
+            pca_idx_cursor += k
+
+    print(f"[Preprocess] PCA-Local on OHE: groups={len(groups)} total_k={total_k} replace={replace}")
+    return Xtr_out , Xte_out , {"groups": spec_groups, "total_k": int(total_k)}
+
+#==========================================
+
+def standardize(Xtr_new, Xte_new, cont_idx=None, return_updated_idx=False):
+    """Standardize using training stats; drop zero-variance columns.
+
+    Modes:
+      - config.STD_CONT == False: standardize all columns globally and drop any zero-variance columns.
+      - config.STD_CONT == True & cont_idx is None: fallback to global standardization (same as above).
+      - config.STD_CONT == True & cont_idx set: standardize only those columns and drop zero-variance ones within that subset.
+    """
+
+    Xtr_new = np.asarray(Xtr_new, dtype=np.float32)
+    Xte_new = np.asarray(Xte_new, dtype=np.float32)
+    std_cont = bool(config.STD_CONT)
+    use_subset = std_cont and (cont_idx is not None) and (len(cont_idx) > 0)
+
+    # ---------- GLOBAL STANDARDIZATION ----------
+    if not use_subset:
+        mean_tr = np.mean(Xtr_new, axis=0) 
+        std_tr = np.std(Xtr_new, axis=0) 
+
+        zero_var_mask = std_tr == 0
+        std_safe = std_tr.copy()
+        std_safe[zero_var_mask] = 1.0
+
+        Xtr_s = (Xtr_new - mean_tr) / std_safe
+        Xte_s = (Xte_new - mean_tr) / std_safe
+
+        if np.any(zero_var_mask):
+            keep_mask = ~zero_var_mask
+            dropped = int(np.sum(zero_var_mask))
+            Xtr_s = Xtr_s[:, keep_mask]
+            Xte_s = Xte_s[:, keep_mask]
+            print(f"[Standardize] mode=global | dropped {dropped} zero-variance columns | Xtr,Xte: {Xtr_s.shape} {Xte_s.shape}")
+        else:
+            print(f"[Standardize] mode=global | no zero-variance | Xtr,Xte: {Xtr_s.shape} {Xte_s.shape}")
+
+        return (
+            (Xtr_s , Xte_s )
+            if not return_updated_idx
+            else (Xtr_s, Xte_s, np.array(cont_idx if cont_idx is not None else [], dtype=int))
+        )
+
+    # ---------- SUBSET STANDARDIZATION ----------
+    cont_idx = np.asarray(cont_idx, dtype=int)
+    Xtr_s = Xtr_new.copy()
+    Xte_s = Xte_new.copy()
+    mu = np.mean(Xtr_new[:, cont_idx], axis=0) 
+    sd = np.std(Xtr_new[:, cont_idx], axis=0) 
+
+    zero_var_mask_local = sd == 0
+    sd_safe = sd.copy()
+    sd_safe[sd_safe == 0] = 1.0
+
+    Xtr_s[:, cont_idx] = (Xtr_new[:, cont_idx] - mu) / sd_safe
+    Xte_s[:, cont_idx] = (Xte_new[:, cont_idx] - mu) / sd_safe
+
+    if np.any(zero_var_mask_local):
+        to_drop_global = cont_idx[zero_var_mask_local]
+        keep_mask_global = np.ones(Xtr_s.shape[1], dtype=bool)
+        keep_mask_global[to_drop_global] = False
+        Xtr_s = Xtr_s[:, keep_mask_global]
+        Xte_s = Xte_s[:, keep_mask_global]
+
+        new_positions = np.nonzero(keep_mask_global)[0]
+        cont_idx_kept_old = cont_idx[~zero_var_mask_local]
+        pos_map = {old: new for new, old in enumerate(new_positions)}
+        cont_idx_kept_new = np.array([pos_map[i] for i in cont_idx_kept_old], dtype=int)
+
+        print(f"[Standardize] mode=subset | dropped {to_drop_global.size} zero-variance continuous cols | Xtr,Xte: {Xtr_s.shape} {Xte_s.shape}")
+        if return_updated_idx:
+            return Xtr_s, Xte_s, cont_idx_kept_new
+        return Xtr_s, Xte_s
+
+    print(f"[Standardize] mode=subset | n_cols={cont_idx.size} | Xtr,Xte: {Xtr_s.shape} {Xte_s.shape}")
+    if return_updated_idx:
+        return Xtr_s, Xte_s, cont_idx
     return Xtr_s, Xte_s
 
-
 #==========================================
 
+def pca(Xtr, Xte, cols=None, n_components=None, variance_ratio=None, replace=True):
+    """Fit PCA on selected columns (train), project both splits.
 
-def pca(Xtr, Xte, n_components=config.K):
-    """
-    Apply Principal Component Analysis (PCA) for dimensionality reduction.
-    
-    PCA transforms features into orthogonal principal components ordered by 
-    variance explained. This can help:
-    - Reduce multicollinearity
-    - Speed up training
-    - Reduce overfitting (regularization effect)
-    - Denoise data
-    
     Args:
-        Xtr: Training data array (standardized, n_samples x n_features)
-        Xte: Test data array (standardized, n_samples x n_features)
-        n_components: Number of components to keep. If None, uses explained_variance_ratio
-    
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        cols (array-like or None): Indices to project; defaults to all columns.
+        n_components (int or None): Fixed number of components to keep.
+        variance_ratio (float or None): Minimum explained variance ratio to retain.
+        replace (bool): If True, replace the original block; otherwise, append components.
+
     Returns:
-        Xtr_pca, Xte_pca: Transformed arrays with reduced dimensionality
+        tuple: (Xtr_out, Xte_out, spec) with PCA metadata and resulting indices.
     """
-    Xtr = np.array(Xtr, dtype=np.float32, copy=True)
-    Xte = np.array(Xte, dtype=np.float32, copy=True)
-    
-    n_samples, n_features = Xtr.shape
-    
-    # Compute covariance matrix
-    # Use (X^T @ X) / (n-1) for numerical stability
-    cov_matrix = (Xtr.T @ Xtr) / (n_samples - 1)
-    
-    # Compute eigenvalues and eigenvectors
-    eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
-    
-    # Sort by eigenvalues in descending order
-    idx = np.argsort(eigenvalues)[::-1]
-    eigenvalues = eigenvalues[idx]
-    eigenvectors = eigenvectors[:, idx]
+    Xtr = np.asarray(Xtr, np.float32)
+    Xte = np.asarray(Xte, np.float32)
+    if cols is None:
+        cols = np.arange(Xtr.shape[1])
+    else:
+        cols = np.array(cols, dtype=int)
+    Xtr_blk = Xtr[:, cols]
+    Xte_blk = Xte[:, cols]
+    mean_tr = np.mean(Xtr_blk, axis=0, dtype=np.float64)
+    Xtr_c = (Xtr_blk - mean_tr) 
+    Xte_c = (Xte_blk - mean_tr) 
+    _, S, Vt = np.linalg.svd(Xtr_c, full_matrices=False)
+    n_samples = Xtr_c.shape[0]
+    explained_var = (S ** 2) / max(n_samples - 1, 1)
+    explained_ratio = explained_var / np.sum(explained_var)
+    k_max = Vt.shape[0]
+    k = k_max
+    cfg_k =config.PCA_K
+    if variance_ratio is not None:
+        vr = float(np.clip(variance_ratio, 0.0, 1.0))
+        cumsum = np.cumsum(explained_ratio)
+        k = int(np.searchsorted(cumsum, vr, side="left") + 1)
+    elif n_components is not None:
+        k = int(min(max(n_components, 1), k_max))
+    elif cfg_k is not None:
+        if isinstance(cfg_k, float) and 0 < cfg_k <= 1.0:
+            cumsum = np.cumsum(explained_ratio)
+            k = int(np.searchsorted(cumsum, cfg_k, side="left") + 1)
+        else:
+            k = int(min(max(cfg_k, 1), k_max))
+    components = Vt[:k, :].T 
+    Xtr_proj = Xtr_c @ components
+    Xte_proj = Xte_c @ components
+    explained = float(np.sum(explained_ratio[:k])) * 100
+    print(f"[Preprocess] PCA: block d={Xtr_blk.shape[1]} → k={k} comps ({explained:.2f}% variance), replace={replace}")
+    if replace:
+        keep_idx = [j for j in range(Xtr.shape[1]) if j not in set(cols)]
+        Xtr_out = np.column_stack([Xtr[:, keep_idx], Xtr_proj])
+        Xte_out = np.column_stack([Xte[:, keep_idx], Xte_proj])
+        base = len(keep_idx)
+        pca_component_idx = list(range(base, base + Xtr_proj.shape[1]))
+    else:
+        Xtr_out = np.column_stack([Xtr, Xtr_proj])
+        Xte_out = np.column_stack([Xte, Xte_proj])
+        base = Xtr.shape[1]
+        pca_component_idx = list(range(base, base + Xtr_proj.shape[1]))
+    spec = {
+        "cols": np.array(cols, int).tolist(),
+        "mean": mean_tr ,
+        "components": components,
+        "explained_ratio": explained_ratio[:k] ,
+        "k": k,
+        "replace": bool(replace),
+        "pca_component_idx": pca_component_idx,
+    }
+    return Xtr_out , Xte_out , spec
 
-    total_variance = np.sum(eigenvalues)
-    variance_explained = np.sum(eigenvalues[:n_components]) / total_variance
-    
-    print(f"[Preprocess] PCA: keeping {n_components}/{n_features} components "
-            f"(explains {variance_explained*100:.2f}% variance)")
-    
-    # Select top n_components eigenvectors
-    principal_components = eigenvectors[:, :n_components]
-    
-    # Project data onto principal components
-    Xtr_pca = Xtr @ principal_components
-    Xte_pca = Xte @ principal_components
-    
-    return Xtr_pca, Xte_pca
+#==========================================
 
+def filter_add_predictive_nan_indicators(
+    Xtr, Xte, y_train,
+    threshold=0.01, top_k=128,
+    min_prevalence=0.005, max_prevalence=0.995
+):
+    """Add missingness indicators selected by correlation with the target.
 
-def poly_features():
+    Drops any source feature whose NaN rate in the test split is >= 0.30,
+    then creates isnan indicators and keeps those with highest absolute
+    correlation to the target (threshold + top-k). The same selection
+    is applied to test.
     """
-    meh. risk of overfitting ? Give it a try if time allows, especially if combined with PCA 
-    """
-    return 
+    Xtr = np.asarray(Xtr, np.float32)
+    Xte = np.asarray(Xte, np.float32)
+    y = np.asarray(y_train, np.float32).ravel()
 
+    # ---- 1) ----
+    test_nan_rate = np.isnan(Xte).mean(axis=0) if Xte.size else np.array([], dtype=np.float32)
+    keep_cols = test_nan_rate < 0.30 if test_nan_rate.size else np.array([], dtype=bool)
+    if test_nan_rate.size and not np.all(keep_cols):
+        n_drop = int((~keep_cols).sum())
+        n_keep = int(keep_cols.sum())
+        print(f"[Preprocess] NaN-based feature filter (test): dropped={n_drop}, kept={n_keep}, thr=0.30")
+        if n_keep == 0:
+            return Xtr[:, :0] , Xte[:, :0] 
+        Xtr = Xtr[:, keep_cols]
+        Xte = Xte[:, keep_cols]
+    elif test_nan_rate.size:
+        print(f"[Preprocess] NaN-based feature filter (test): dropped=0, kept={Xtr.shape[1]}, thr=0.30")
 
-def compute_sample_weights(y_train):
-    """
-    Compute sample weights to handle class imbalance in the dataset.
-    
-    For imbalanced datasets (+1: 91.17%, -1: 8.83%), this assigns higher
-    weights to minority class samples to balance their influence during training.
-    
-    Weight formula for 'balanced' strategy:
-        w_i = n_samples / (n_classes * n_samples_in_class_i)
-    
+    # ---- 2) ----
+    Mtr = np.isnan(Xtr) 
+    Mte = np.isnan(Xte) 
+    if Mtr.size == 0:
+        print("[Preprocess] NaN indicators: no features after test-NaN filter")
+        return Xtr, Xte
+    prev = Mtr.mean(axis=0)
+    keep_prev = (prev >= float(min_prevalence)) & (prev <= float(max_prevalence))
+    if not np.any(keep_prev):
+        print("[Preprocess] NaN indicators: none selected (prevalence filter)")
+        return Xtr, Xte
+
+    # ---- 3) ----
+    yz = (y - y.mean()) / (y.std() + 1e-12)
+    mu = Mtr[:, keep_prev].mean(axis=0)
+    sd = Mtr[:, keep_prev].std(axis=0)
+    sd[sd == 0] = 1.0
+    Z = (Mtr[:, keep_prev] - mu) / sd
+    corrs = (Z.T @ yz) / (Xtr.shape[0] - 1)
+    scores = np.abs(np.nan_to_num(corrs, 0.0))
+    if threshold is not None:
+        mask_thr = scores > float(threshold)
+        if not np.any(mask_thr):
+            print("[Preprocess] NaN indicators: none above threshold")
+            return Xtr, Xte
+        cand_local = np.where(mask_thr)[0]
+    else:
+        cand_local = np.arange(scores.size)
+    if top_k is not None and cand_local.size > int(top_k):
+        order = np.argsort(-scores[cand_local])[:int(top_k)]
+        cand_local = cand_local[order]
+
+    # ---- 4) ----
+    cand_global = np.where(keep_prev)[0][cand_local]
+    if cand_global.size == 0:
+        print("[Preprocess] NaN indicators: none selected")
+        return Xtr, Xte
+    Xtr_aug = np.hstack([Xtr, Mtr[:, cand_global]])
+    Xte_aug = np.hstack([Xte, Mte[:, cand_global]])
+    print(f"[Preprocess] NaN indicators: add {cand_global.size}/{Xtr.shape[1]} (thr={threshold}, top_k={top_k}, prev∈[{min_prevalence},{max_prevalence}])")
+    return Xtr_aug , Xte_aug 
+
+#==========================================
+
+def _listify_idx(idx, d):
+    """Return a NumPy array of indices. If None, return all column indices.
+
     Args:
-        y_train: Training labels array (n_samples,), expected in {-1, +1} or {0, 1} format
-        strategy: Weighting strategy. Options:
-            - 'balanced': Automatically adjust weights inversely proportional to class frequencies
-            - 'uniform': Equal weights for all samples (returns ones)
-    
+        idx (array-like or None): Indices or None.
+        d (int): Number of columns.
+
     Returns:
-        sample_weights: Array of shape (n_samples,) with weight for each sample
+        np.ndarray: Indices as integers.
     """
-    y_train = np.asarray(y_train)
-    n_samples = len(y_train)  
+    if idx is None:
+        return np.arange(d, dtype=int)
+    return np.array(idx, dtype=int)
 
-    # Get unique classes and their counts
-    unique_classes, class_counts = np.unique(y_train, return_counts=True)
-    n_classes = len(unique_classes)
-    
-    # Compute weight for each class: n_samples / (n_classes * count_for_class)
-    class_weights = n_samples / (n_classes * class_counts)
-    
-    # Create mapping from class label to weight
-    class_to_weight = dict(zip(unique_classes, class_weights))
-    
-    # Assign weight to each sample based on its class
-    sample_weights = np.array([class_to_weight[label] for label in y_train], 
-                                dtype=np.float32)
-    
-    # Log class distribution and weights
-    print(f"[Class Weighting] Dataset imbalance detected:")
-    for cls, count in zip(unique_classes, class_counts):
-        pct = 100 * count / n_samples
-        weight = class_to_weight[cls]
-        print(f"  Class {cls:+d}: {count:6d} samples ({pct:5.2f}%) -> weight: {weight:.4f}")
-    
-    return sample_weights
-    
 
+def polynomial_features(
+    Xtr,
+    Xte,
+    y_train,
+    cont_idx=None,
+    add_squares_cont=True,
+    add_inter_within_cont=True,
+    top_k_pairs=256,
+    min_abs_corr=0.0,
+):
+    """Add polynomial features to train and test: x^2 and x_i*x_j (continuous only).
+
+    This simplified version keeps only squares of continuous features and
+    pairwise interactions among continuous features.
+
+    Selection uses absolute correlation with the target to optionally filter
+    and rank features.
+
+    Args:
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        y_train (np.ndarray): Target vector used for scoring.
+        cont_idx (array-like or None): Indices considered as continuous. If None, all columns.
+        add_squares_cont (bool): Add squares for continuous indices.
+        add_inter_within_cont (bool): Add interactions within continuous indices.
+        top_k_pairs (int): Max number of interaction terms to keep (after thresholding).
+        min_abs_corr (float): Minimum absolute correlation score for added features.
+
+    Returns:
+        tuple: (Xtr_aug, Xte_aug, spec) with added features and the recipe used.
+    """
+    Xtr = np.asarray(Xtr, np.float32)
+    Xte = np.asarray(Xte, np.float32)
+    y = np.asarray(y_train, np.float32).ravel()
+    d = Xtr.shape[1]
+    cont_idx = _listify_idx(cont_idx, d)
+
+    # Build candidate squares (continuous only)
+    squares = []
+    if add_squares_cont and cont_idx.size:
+        squares = [("square", int(i)) for i in cont_idx]
+
+    # Build candidate pairwise interactions within continuous features only
+    pairs = []
+    if add_inter_within_cont and cont_idx.size > 1:
+        ci = cont_idx
+        for a in range(ci.size):
+            for b in range(a + 1, ci.size):
+                pairs.append(("prod", int(ci[a]), int(ci[b])))
+
+    # If nothing to add, return early
+    if not squares and not pairs:
+        return Xtr, Xte, {"squares": [], "pairs": [], "n_added": 0}
+
+    added_blocks = []
+    meta_blocks = []
+    if squares:
+        cols = np.array([t[1] for t in squares], dtype=int)
+        Z = Xtr[:, cols] ** 2
+        added_blocks.append(Z)
+        meta_blocks += [("square", int(k)) for k in cols]
+
+    def score_block(Z: np.ndarray) -> np.ndarray:
+        yz = (y - y.mean()) / (y.std() + 1e-12)
+        mu = Z.mean(axis=0)
+        sd = Z.std(axis=0)
+        sd[sd == 0] = 1.0
+        Zs = (Z - mu) / sd
+        corrs = (Zs.T @ yz) / (Xtr.shape[0] - 1)
+        return np.abs(np.nan_to_num(corrs, 0.0))
+
+    # Score pairwise interactions in chunks to bound memory
+    pair_chunks = []
+    chunk_meta = []
+    CHUNK = max(1, 16384 // max(1, Xtr.shape[0]))
+    if pairs:
+        cur = 0
+        while cur < len(pairs):
+            end = min(len(pairs), cur + CHUNK)
+            P = pairs[cur:end]
+            Z = np.empty((Xtr.shape[0], len(P)), dtype=np.float32)
+            for k, (_, i, j) in enumerate(P):
+                Z[:, k] = Xtr[:, i] * Xtr[:, j]
+            sc = score_block(Z)
+            pair_chunks.append((Z, sc))
+            chunk_meta.append(P)
+            cur = end
+
+    # Compute scores
+    scores_sq = np.array([], dtype=np.float32)
+    if squares:
+        scores_sq = score_block(added_blocks[0])
+    scores_pairs = np.array([], dtype=np.float32)
+    if pairs:
+        scores_pairs = np.concatenate([sc for (_, sc) in pair_chunks], axis=0)
+
+    # Thresholding
+    keep_sq = np.ones_like(scores_sq, dtype=bool)
+    if scores_sq.size and min_abs_corr is not None:
+        keep_sq = scores_sq >= float(min_abs_corr)
+    keep_pairs = np.ones_like(scores_pairs, dtype=bool)
+    if scores_pairs.size and min_abs_corr is not None:
+        keep_pairs = scores_pairs >= float(min_abs_corr)
+
+    # Ranking
+    order_sq = np.argsort(-(scores_sq[keep_sq])) if scores_sq.size else np.array([], dtype=int)
+    order_pairs = np.argsort(-(scores_pairs[keep_pairs])) if scores_pairs.size else np.array([], dtype=int)
+
+    # Keep top-k interactions (after threshold)
+    if scores_pairs.size:
+        idx_pairs_local = np.where(keep_pairs)[0][order_pairs]
+        if top_k_pairs is not None:
+            idx_pairs_local = idx_pairs_local[: int(top_k_pairs)]
+    else:
+        idx_pairs_local = np.array([], dtype=int)
+
+    # Materialize selected features
+    added_list = []
+    meta_added = []
+    if scores_sq.size:
+        idx_sq_keep = np.where(keep_sq)[0][order_sq]
+        if idx_sq_keep.size:
+            Z_sq = added_blocks[0][:, idx_sq_keep]
+            added_list.append(Z_sq)
+            meta_added += [meta_blocks[k] for k in idx_sq_keep.tolist()]
+
+    if idx_pairs_local.size:
+        Z_pairs_keep = []
+        pairs_keep_meta = []
+        base = 0
+        for (Zchunk, _), Pmeta in zip(pair_chunks, chunk_meta):
+            nloc = Zchunk.shape[1]
+            loc_range = np.arange(base, base + nloc)
+            m = np.intersect1d(idx_pairs_local, loc_range, assume_unique=False)
+            if m.size:
+                take = m - base
+                Z_pairs_keep.append(Zchunk[:, take])
+                pairs_keep_meta += [Pmeta[t] for t in take.tolist()]
+            base += nloc
+        if Z_pairs_keep:
+            added_list.append(np.column_stack(Z_pairs_keep))
+            meta_added += pairs_keep_meta
+
+    if not added_list:
+        return Xtr, Xte, {"squares": [], "pairs": [], "n_added": 0}
+
+    Zall = np.column_stack(added_list)
+    Xtr_aug = np.column_stack([Xtr, Zall])
+    spec = {
+        "squares": [t[1] for t in meta_added if t[0] == "square"],
+        "pairs": [(t[1], t[2]) for t in meta_added if t[0] == "prod"],
+        "n_added": int(Zall.shape[1]),
+    }
+    # Build test features in the same order as meta_added
+    te_added = []
+    for t in meta_added:
+        if t[0] == "square":
+            te_added.append((Xte[:, int(t[1])] ** 2).reshape(-1, 1))
+        else:  # ("prod", i, j)
+            te_added.append((Xte[:, int(t[1])] * Xte[:, int(t[2])]).reshape(-1, 1))
+    if te_added:
+        Zte = np.column_stack(te_added)
+        Xte_aug = np.column_stack([Xte, Zte])
+    else:
+        Xte_aug = Xte
+
+    print(f"[Preprocess] Polynomial features: added {spec['n_added']} (squares={len(spec['squares'])}, pairs={len(spec['pairs'])})")
+    return Xtr_aug, Xte_aug, spec
+
+
+def encode_ordinal_as_score(Xtr, Xte, ord_idx, scale_to_unit=True):
+    """Encode ordinal features as monotone scores learned on the training set.
+
+    Levels observed in training are mapped to increasing ranks. Unseen levels in test are mapped
+    to the maximum rank. Missing values are preserved. Scores can optionally be scaled to the unit interval.
+
+    Args:
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        ord_idx (array-like): Indices of ordinal features.
+        scale_to_unit (bool): If True, divide ranks by the maximum rank per feature.
+
+    Returns:
+        tuple: (Xtr_new, Xte_new, spec) with per-column mapping metadata.
+    """
+    Xtr = np.asarray(Xtr, np.float32).copy()
+    Xte = np.asarray(Xte, np.float32).copy()
+    ordinal_maps = {}
+
+    for j in ord_idx:
+        vtr = Xtr[:, j]
+        cats_sorted = np.unique(vtr[~np.isnan(vtr)])
+        if cats_sorted.size == 0:
+            ordinal_maps[j] = {"levels": [], "K": 1, "scaled": bool(scale_to_unit)}
+            continue
+
+        K = max(len(cats_sorted) - 1, 1)
+
+        ranks_tr = np.full(vtr.shape, np.nan, dtype=np.float32)
+        valid_tr = ~np.isnan(vtr)
+        if valid_tr.any():
+            idx_tr = np.searchsorted(cats_sorted, vtr[valid_tr], side="left")
+            in_bounds_tr = idx_tr < cats_sorted.size
+            match_tr = np.zeros_like(idx_tr, dtype=bool)
+            if in_bounds_tr.any():
+                match_tr[in_bounds_tr] = (cats_sorted[idx_tr[in_bounds_tr]] == vtr[valid_tr][in_bounds_tr])
+            ranks_tr[valid_tr] = np.where(match_tr, idx_tr, K) 
+
+        vte = Xte[:, j]
+        ranks_te = np.full(vte.shape, np.nan, dtype=np.float32)
+        valid_te = ~np.isnan(vte)
+        if valid_te.any():
+            idx_te = np.searchsorted(cats_sorted, vte[valid_te], side="left")
+            in_bounds_te = idx_te < cats_sorted.size
+            match_te = np.zeros_like(idx_te, dtype=bool)
+            if in_bounds_te.any():
+                match_te[in_bounds_te] = (cats_sorted[idx_te[in_bounds_te]] == vte[valid_te][in_bounds_te])
+            ranks_te[valid_te] = np.where(match_te, idx_te, K) 
+
+        if scale_to_unit and K > 0:
+            ranks_tr = ranks_tr / K
+            ranks_te = ranks_te / K
+
+        Xtr[:, j] = ranks_tr
+        Xte[:, j] = ranks_te
+
+        ordinal_maps[j] = {
+            "levels": cats_sorted.tolist(),
+            "K": int(K),
+            "scaled": bool(scale_to_unit),
+        }
+
+    return Xtr, Xte, {"ordinal_maps": ordinal_maps}
+
+
+def drop_useless_columns(Xtr, Xte, drop_n=0):
+    """Drop the first N categorical columns but keep column 1 (state) in front.
+
+    Args:
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        drop_n (int): Number of leading categorical columns to remove.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Updated Xtr and Xte with column 1 preserved.
+    """
+    keep_col1 = Xtr[:, [1]]  # State can influence health
+    Xtr = Xtr[:, drop_n:]
+    Xte = Xte[:, drop_n:]
+    Xtr = np.hstack([keep_col1, Xtr])
+    Xte = np.hstack([keep_col1[:Xte.shape[0]], Xte])
+    return Xtr, Xte
 
 #==========================================
 #==========================================
-
-
-# def preprocess1(Xtr_raw, Xte_raw):
-#     """
-#     Preprocess train/test sets, return processed matrices.
-#     """
-#     Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
-#     Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
-   
-
-#     Xtr, Xte = mean_impute(Xtr_raw, Xte_raw)
-
-#     Xtr, Xte = filter_constant_and_nan_columns(Xtr, Xte)
-    
-#     #print(f"[Preprocess] drop const/NA-only -> keep {Xtr.shape[1]} cols")
-
-#     # Light one-hot encoding
-#     Xtr, Xte = one_hot_encoding(Xtr, Xte)
-        
-#     # Standardization
-#     Xtr, Xte = standardize(Xtr, Xte)
-
-#     # Bias term for w_0
-#     Xtr_f = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
-#     Xte_f = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
-
-#     print(f"[Preprocess] final dims: train={Xtr_f.shape}, test={Xte_f.shape}")
-
-#     # func in implementations.py assumes y takes {0,1} !
-#     y_tr_01 = metrics.to_01_labels(y_train_pm1) 
-
-#     return Xtr_f, Xte_f
-
 
 def preprocess2():
+    """
+    Full preprocessing pipeline for BRFSS-like data.
+
+    Steps:
+      0. Drop first N categorical columns (keep state).
+      1. Replace BRFSS special codes with NaN.
+      2. Optionally encode ordinal features as scores in [0,1].
+      3. One-hot encode nominal features, optionally reduce with PCA.
+      4. Add predictive NaN indicators.
+      5. Impute missing values with smart_impute.
+      6. Optionally add polynomial features for continuous vars.
+      7. Standardize continuous features.
+      8. Optionally prune highly correlated features.
+      9. Optionally add bias column.
+     10. save processed data to .npz.
+
+    Args:
+        Xtr_raw: Raw training feature matrix.
+        Xte_raw: Raw test feature matrix.
+        ytr_pm1: Training labels in {-1, 1} format.
+        train_ids: Array of training sample identifiers.
+        test_ids: Array of test sample identifiers.
+        filename: Path to save the processed dataset (.npz).
+
+    Returns:
+        Tuple (Xtr, Xte, ytr_01): processed train/test features and labels converted to {0, 1}.
+    """
     if config.PREPROCESSING:
         Xtr_raw, Xte_raw, ytr_pm1, train_ids, test_ids = helpers.load_csv_data(config.DATA_DIR)
-
-        Xtr_raw = np.array(Xtr_raw, dtype=np.float32, copy=True) # make a copy (default args are passed by reference!)
-        Xte_raw = np.array(Xte_raw,  dtype=np.float32, copy=True)
-        print(Xtr_raw.shape[1])
-
-        print("[Preprocess] Removing low-validity features...")
-        Xtr, Xte = remove_low_validity_features(Xtr_raw, Xte_raw)
-        print(Xtr.shape[1])
-
-        print("[Preprocess] Imputing missing values (smart)...")
-        Xtr, Xte = smart_impute(Xtr, Xte)
-        print(Xtr.shape[1])
-
-        print("[Preprocess] Removing low-variance features...")
-        Xtr, Xte = variance_treshold(Xtr, Xte)
-        print(Xtr.shape[1])
-
-        print("[Preprocess] Removing highly correlated features...")
-        Xtr, Xte = remove_highly_correlated_features(Xtr, Xte, ytr_pm1)
-        print(Xtr.shape[1])
         
-        print("[Preprocess] One-hot encoding categorical features...")
-        Xtr, Xte = one_hot_encoding(Xtr, Xte)
-        print(Xtr.shape[1])
+        Xtr = np.asarray(Xtr_raw, np.float32)
+        Xte = np.asarray(Xte_raw, np.float32)
+        ytr_01 = metrics.to_01_labels(ytr_pm1)
+        print(f"[Pipeline] Start | Xtr={Xtr.shape} Xte={Xte.shape} y={ytr_01.shape}")
 
-        print("[Preprocess] Standardizing features...")    
-        Xtr, Xte = standardize(Xtr, Xte)
-        print(Xtr.shape[1])
+        #--- Step 0: Drop useless columns ---
+        drop_n = config.DROP_FIRST_N_CAT_COLS
+        if drop_n>0:
+            Xtr, Xte = drop_useless_columns(Xtr, Xte, drop_n=drop_n)
+        print(f"[Step0] Dropped useless cols (col 1 kept) | Xtr={Xtr.shape} Xte={Xte.shape}")
 
-        print("[Preprocess] PCA...") 
-        #Xtr, Xte = pca(Xtr, Xte)
-        print(Xtr.shape[1])
+        #--- Step 1: BRFSS special codes ---
+        Xtr = replace_brfss_special_codes(Xtr)
+        Xte = replace_brfss_special_codes(Xte)
+        print(f"[Step1] BRFSS cleaned | NaN train={np.isnan(Xtr).sum()} NaN test={np.isnan(Xte).sum()}")
 
-        print("[Preprocess] Adding bias term...")
-        Xtr = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
-        Xte = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
-        print(Xtr.shape[1])
+        #--- Step 2: Ordinal encoding ---
+        types = infer_feature_types(Xtr, max_unique_cat=config.LOW_CARD_MAX_UNIQUE)
+        ord_idx = types["ordinal"]
+        if ord_idx.size > 0 and config.ORDINAL_ENCODE:
+            Xtr, Xte, _ = encode_ordinal_as_score(
+                Xtr, Xte, ord_idx=ord_idx, scale_to_unit=config.ORDINAL_SCALE_TO_UNIT
+            )
+            print(f"[Ordinals] encoded {len(ord_idx)} columns as monotone scores")
 
-        ytr_01 = metrics.to_01_labels(ytr_pm1) 
-
-        print("[Preprocess] Computing sample weights for class imbalance...")
-        sample_weights = compute_sample_weights(ytr_pm1)
-
-        print(f"[Preprocess] Saving preprocessed data")
-        save(Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights)
-    else:
-        Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights = load_preproc_data()
-
-    return Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights
-
-
-#==========================================
-#==========================================
+        #-- Step 3: One-hot encoding ---
+        cont_idx_std = types["continuous"]
+        cat_nom_idx = types["nominal"]
 
 
-def save(Xtr, Xte, ytr, train_ids, test_ids, sample_weights, filename=config.PREPROC_DATA_PATH):
-    np.savez_compressed(
-        filename,
-        X_train   = Xtr, 
-        X_test    = Xte, 
-        y_train   = ytr,
-        train_ids = train_ids, 
-        test_ids  = test_ids,
-        sample_weights = sample_weights
+        print(f"[Step2] OHE | #nominal={len(cat_nom_idx)} drop_first={config.ONEHOT_DROP_FIRST} total_cap={config.MAX_ADDED_ONEHOT}")
+
+        Xtr, Xte, _, keep_idx, dummy_map = one_hot_encoding_selected(
+        Xtr, Xte, cat_nom_idx,
+        drop_first=config.ONEHOT_DROP_FIRST,
+        total_cap=config.MAX_ADDED_ONEHOT,
     )
+        ohe_start = len(keep_idx) 
+        ohe_end = Xtr.shape[1]
+        ohe_cols = np.arange(ohe_start, ohe_end, dtype=int) #for PCA later
+        print(f"[Step2] OHE done | Xtr={Xtr.shape} Xte={Xte.shape}")
 
+        #--- Step 3: PCA on OHE ---
+        if config.PCA_Local is not None:
+            Xtr, Xte, pca_local_spec = pca_local_on_ohe(Xtr, Xte, dummy_map, cfg=config.PCA_Local)
+
+            #for later use 
+            pca_idx_list = []
+            for meta in pca_local_spec.get("groups", {}).values():
+                pca_idx_list.extend(meta.get("pca_component_idx", []))
+            pca_spec = {"k": int(pca_local_spec.get("total_k", 0)), "pca_component_idx": pca_idx_list}
+            print(f"[Step3] PCA-Local on OHE | Xtr={Xtr.shape} Xte={Xte.shape} | total_k={pca_spec['k']}")
+
+        else: # Global PCA but not use at the end of project 
+            pca_var = config.PCA_VAR
+            pca_k = config.PCA_K
+            if ohe_cols.size > 0:
+                Xtr, Xte, pca_spec = pca(
+                    Xtr, Xte,
+                    cols=ohe_cols,
+                    n_components=(None if isinstance(pca_k, float) else pca_k),
+                    variance_ratio=(pca_var if isinstance(pca_var, float) else None),
+                    replace=True
+                )
+            else:
+                pca_spec = {"k": 0, "pca_component_idx": []}
+            print(f"[Step3] PCA on OHE | Xtr={Xtr.shape} Xte={Xte.shape} | k={pca_spec.get('k', 0)}")
+
+        #--- Step 4: NaN indicators ---
+        n_before = Xtr.shape[1]
+        Xtr, Xte = filter_add_predictive_nan_indicators(
+            Xtr, Xte, ytr_01,
+            threshold=config.NAN_INDICATOR_MIN_ABS_CORR,
+            top_k=config.NAN_INDICATOR_TOPK,
+            min_prevalence=config.NAN_INDICATOR_MIN_PREV,
+            max_prevalence=config.NAN_INDICATOR_MAX_PREV
+        )
+        print(f"[Step4] NaN indicators | +{Xtr.shape[1] - n_before} cols | Xtr={Xtr.shape} Xte={Xte.shape}")
+
+        #--- Step 5: Imputation ---
+        Xtr, Xte = smart_impute(
+            Xtr, Xte,
+            skew_rule=0.5,
+            allnan_fill_cont=0.0,
+            allnan_fill_nom=-1.0, #fallback values
+            allnan_fill_bin=0.0 
+        )
+
+        print(f"[Step5] Impute Done")
+        assert np.isnan(Xtr).sum() == 0 or np.isnan(Xte).sum() == 0, "There are still NaNs in Xtr or Xte after imputation!" #sanity check
+
+        #--- Step 6: Polynomial feature expansion ---
+        if config.POLY_ENABLE:
+            cont_idx_base = cont_idx_std
+
+            Xtr, Xte, poly_spec = polynomial_features(
+                Xtr, Xte, ytr_01,
+                cont_idx=cont_idx_base,
+                add_squares_cont=config.POLY_ADD_SQUARES_CONT,
+                add_inter_within_cont=config.POLY_ADD_INTER_CONT,
+                top_k_pairs=config.POLY_TOPK_PAIRS,
+                min_abs_corr=config.POLY_MIN_ABS_CORR,
+            )
+            print(f"[Step6] Polynomial features | added={poly_spec.get('n_added', 0)} | Xtr={Xtr.shape} Xte={Xte.shape}")
+
+        #-- Step 7: Standardization ---
+        Xtr, Xte, cont_idx_std = standardize(Xtr, Xte, cont_idx=cont_idx_std, return_updated_idx=True)
+        print(f"[Step7] Standardize | Xtr={Xtr.shape} Xte={Xte.shape}")
+
+        #--- Step 8: Correlation-based pruning ---
+        if config.PRUNE_CORR_THRESHOLD is not None and cont_idx_std.size > 0:
+            Xtr, Xte, dropped_g, kept_g = remove_highly_correlated_continuous(
+                Xtr, Xte, cont_idx=cont_idx_std, y_train=ytr_01, threshold=config.PRUNE_CORR_THRESHOLD
+            )
+            kept_g = np.asarray(kept_g, dtype=int)
+            print(f"[Step8] Corr prune | thr={config.PRUNE_CORR_THRESHOLD} | dropped={len(dropped_g)}")
+        else:
+            print("[Step8] Corr prune | skipped")
+            
+        #--- Step 9: Bias term ---
+        if config.ADD_BIAS:
+            Xtr = np.hstack([np.ones((Xtr.shape[0], 1), dtype=np.float32), Xtr])
+            Xte = np.hstack([np.ones((Xte.shape[0], 1), dtype=np.float32), Xte])
+            print(f"[Step9] Bias added | Xtr={Xtr.shape} Xte={Xte.shape}")
+
+        #--- Step 10: Save processed dataset ---
+        save(Xtr, Xte, ytr_01, train_ids, test_ids)
+
+        print(f"[Pipeline] Done | Xtr={Xtr.shape} Xte={Xte.shape}")
+    else: 
+        Xtr, Xte, ytr_01, train_ids, test_ids = load_preproc_data()
+
+    return Xtr, Xte, ytr_01, train_ids, test_ids
+
+#==========================================
+#==========================================
+
+def save(Xtr, Xte, ytr, train_ids, test_ids, filename=config.PREPROC_DATA_PATH):
+    """
+    Save arrays to a compressed .npz archive.
+
+    Args:
+        Xtr (np.ndarray): Training matrix.
+        Xte (np.ndarray): Test matrix.
+        ytr (np.ndarray): Training labels.
+        train_ids (np.ndarray): Training identifiers.
+        test_ids (np.ndarray): Test identifiers.
+        filename (str): Output file path.
+
+    Returns:
+        None
+    """
+    np.savez_compressed(
+        filename, 
+        X_train     = Xtr, 
+        X_test      = Xte, 
+        y_train     = ytr, 
+        train_ids   = train_ids, 
+        test_ids    = test_ids
+    )
+    print(f"[Step10] Saved -> {filename}")
 
 def load_preproc_data(filename=config.PREPROC_DATA_PATH): 
     """Load best hyperparameters from disk."""
@@ -539,8 +1174,5 @@ def load_preproc_data(filename=config.PREPROC_DATA_PATH):
     ytr_01    = npz["y_train"]
     train_ids = npz["train_ids"]
     test_ids  = npz["test_ids"]
-    sample_weights = npz["sample_weights"]
     print(f"[Loaded] Preprocessed data from -> {filename}")
-    return Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights
-
-
+    return Xtr, Xte, ytr_01, train_ids, test_ids
