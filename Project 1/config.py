@@ -41,8 +41,8 @@ LOW_CARD_MAX_UNIQUE = 20
 MAX_ADDED_ONEHOT = 2000
 ONEHOT_DROP_FIRST = True
 
-PCA_VAR = 0.97
-PCA_Local = {"variance_ratio": PCA_VAR, "min_cols": 8, "replace": True}
+PCA_VAR = 0.94
+PCA_Local = {"variance_ratio": PCA_VAR, "min_cols": 6, "replace": True}
 PCA_K = None
 ORDINAL_ENCODE = True
 ORDINAL_SCALE_TO_UNIT = True

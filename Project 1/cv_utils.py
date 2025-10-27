@@ -1,6 +1,7 @@
 # Cross-validation and training utilities 
 import numpy as np 
 import metrics
+import math
 import implementations
 import config 
 
@@ -210,28 +211,58 @@ def find_optimal_threshold(y_true, y_prob):
 
 #==========================================
 
-def schedule_cosine(lr0, t, T):
+def schedule_onecycle(lr0, t, T, pct_start=0.3, max_lr_ratio=10.0, min_lr_ratio=1e-3):
     """
-    Cosine annealing schedule.
+    One-Cycle learning rate policy (linear variant).
+    - Warmup phase: increase LR from lr0 to lr0*max_lr_ratio over pct_start*T iters.
+    - Cooldown phase: decrease LR from lr0*max_lr_ratio to lr0*min_lr_ratio over the rest.
+    Args:
+        lr0 (float): Base learning rate.
+        t (int): Current iteration index (0-based).
+        T (int): Total iterations.
+        pct_start (float): Fraction of iterations for warmup.
+        max_lr_ratio (float): Peak LR relative to lr0.
+        min_lr_ratio (float): Final LR floor relative to lr0.
+    Returns:
+        float: Learning rate at iteration t.
+    """
+    T = max(1, int(T))
+    warm = max(1, int(float(pct_start) * T))
+    peak = float(lr0) * float(max_lr_ratio)
+    floor = float(lr0) * float(min_lr_ratio)
+    if t < warm:
+        # linear ramp up from lr0 to peak
+        return float(lr0) + (peak - float(lr0)) * (float(t + 1) / float(warm))
+    # linear decay from peak to floor
+    remain = max(1, T - warm)
+    alpha = min(1.0, max(0.0, float(t - warm + 1) / float(remain)))
+    lr = peak - (peak - floor) * alpha
+    # clamp
+    return max(min(lr, peak), floor)
 
-    Smoothly decreases the learning rate following a half-cosine curve
-    from the initial value to zero across all iterations. Provides a
-    gradual decay that avoids abrupt convergence slowdowns and can
-    improve generalization stability.
+def schedule_nagfree(lr0, t, T, warmup_frac=0.05, min_lr_ratio=1e-2):
+    """
+    Warmup + inverse square-root decay ("NAG-free style").
+    - Linear warmup from 0 → lr0 during the first warmup_frac * T steps.
+    - Then decay as lr = lr0 / sqrt(1 + (t - warmup)), clipped at lr0 * min_lr_ratio.
+    This schedule is simple and robust: warmup stabilizes early updates and
+    1/sqrt(t) decay maintains useful step sizes for long horizons.
+    Args:
+        lr0 (float): Initial/base learning rate.
+        t (int): Current iteration index (0-based).
+        T (int): Total iterations.
+        warmup_frac (float): Fraction of T used for linear warmup.
+        min_lr_ratio (float): Floor as a fraction of lr0 to avoid vanishing steps.
+    Returns:
+        float: Learning rate at iteration t.
     """
     import math
-    return lr0 * 0.5 * (1 + math.cos(math.pi * t / max(1, T)))
-
-
-def schedule_exponential(lr0, t, T, decay=0.99):
-    """
-    Exponential decay schedule.
-
-    Multiplies the current learning rate by a constant decay factor at
-    every iteration. This produces a monotonic and fast decrease, often
-    suitable for smooth convex losses or short optimization horizons.
-    """
-    return lr0 * (decay ** t)
+    warmup = max(1, int(T * float(warmup_frac)))
+    if t < warmup:
+        return lr0 * (float(t + 1) / float(warmup))
+    tau = t - warmup
+    lr = lr0 / math.sqrt(1.0 + float(tau))
+    return max(lr, lr0 * float(min_lr_ratio))
 
 
 def cv_train_and_eval(y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_name, early_stopping, patience, tol): #(args):
@@ -240,7 +271,7 @@ def cv_train_and_eval(y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_nam
 
     Performs stratified K-fold cross-validation for regularized logistic regression
     with support for multiple optimizers (Adam/GD), learning rate schedules 
-    (cosine/exponential), and early stopping. For each fold, trains on the 
+    (nagfree/onecycle), and early stopping. For each fold, trains on the 
     training split and collects out-of-fold predictions. Aggregates all validation
     predictions to find the globally optimal F1-maximizing threshold, then 
     evaluates each fold using this shared threshold.
@@ -253,7 +284,7 @@ def cv_train_and_eval(y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_nam
             - gam (float): Initial learning rate (gamma)
             - max_iters (int): Maximum training iterations per fold
             - use_adam (int/bool): If True/1, use Adam optimizer; else use GD
-            - schedule_name (str): Learning rate schedule ('cosine', 'exponential', or None)
+            - schedule_name (str): Learning rate schedule ('nagfree', 'onecycle', or None)
             - early_stopping (int/bool): If True/1, enable early stopping
             - patience (int): Number of iterations to wait for improvement before stopping
             - tol (float): Minimum improvement threshold for early stopping
@@ -273,7 +304,7 @@ def cv_train_and_eval(y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_nam
             - 'std_f1' (float): Standard deviation of F1 across folds
             - 'optimal_threshold' (float): Global F1-optimal classification threshold
             - 'adam' (bool): Whether Adam optimizer was used
-            - 'schedule' (str): Learning rate schedule used ('cosine', 'exponential', or 'none')
+            - 'schedule' (str): Learning rate schedule used ('nagfree', 'onecycle', or 'none')
     """
     # (
     #     y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_name, early_stopping, patience, tol
@@ -281,10 +312,10 @@ def cv_train_and_eval(y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_nam
 
     folds = create_stratified_folds(y_tr_01)
 
-    if schedule_name == "cosine":
-        schedule = schedule_cosine
-    elif schedule_name == "exponential":
-        schedule = schedule_exponential
+    if schedule_name == "nagfree":
+        schedule = schedule_nagfree
+    elif schedule_name == "onecycle":
+        schedule = schedule_onecycle
     else:
         schedule = None
 
