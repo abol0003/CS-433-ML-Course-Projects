@@ -1,10 +1,6 @@
 import os
 import time
 import numpy as np
-import multiprocessing as mp
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 import helpers 
 # clearer than : from helpers import * As we use suffixes.
@@ -14,24 +10,72 @@ import config
 import preprocessing 
 import metrics 
 import tuning
+import cv_utils
 
 os.makedirs(config.PICT_DIR, exist_ok=True)
 os.makedirs(config.SAVE_DIR, exist_ok=True)
 np.random.seed(config.RNG_SEED)
 
 
-def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
+# def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
+#     t_final = time.time()
+
+#     w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
+#     w_final, final_loss = implementations.reg_logistic_regression(
+#         y_tr_01, X_tr, best_lambda, w0, max_iters=config.MAX_ITERS, gamma=best_gamma
+#     )
+#     print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
+
+#     np.save(config.SAVE_WEIGHTS, w_final)
+#     print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
+
+#     print(f"[Final Training] {time.time() - t_final:.1f}s")
+#     return w_final
+
+
+def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma, use_adam=None, schedule_name=None):
+    """Train the final logistic model on the entire training dataset.
+
+    Depending on the configuration, the function trains either a standard logistic
+    regression model or its NAG-Free variant, using the best hyperparameters found
+    during tuning.
+
+    Args:
+        X_tr (np.ndarray): Training feature matrix.
+        y_tr_01 (np.ndarray): Binary training labels (0/1).
+        best_lambda (float): Regularization parameter.
+        best_gamma (float): Learning rate.
+        use_adam (bool, optional): Use Adam optimizer if True.
+        schedule_name (str, optional): Learning rate schedule name.
+
+    Returns:
+        np.ndarray: Final trained model weights.
+    """
     t_final = time.time()
-
     w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
+
+    final_use_adam = use_adam if use_adam is not None else config.USE_ADAM_DEFAULT
+    final_sched_name = schedule_name if schedule_name is not None else config.SCHEDULE_DEFAULT
+    if final_sched_name == "cosine":
+        schedule = cv_utils.schedule_cosine
+    elif final_sched_name == "exponential":
+        schedule = cv_utils.schedule_exponential
+    else:
+        schedule = None
+
     w_final, final_loss = implementations.reg_logistic_regression(
-        y_tr_01, X_tr, best_lambda, w0, max_iters=config.MAX_ITERS, gamma=best_gamma
+        y_tr_01, X_tr, best_lambda, w0,
+        max_iters=config.FINAL_MAX_ITERS,
+        gamma=best_gamma if best_gamma is not None else 1e-2,
+        adam=final_use_adam, schedule=schedule,
+        early_stopping=config.EARLY_STOP_DEFAULT,
+        patience=config.PATIENCE_DEFAULT, tol=config.TOL_DEFAULT,
+        verbose=False,
     )
-    print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
-
     np.save(config.SAVE_WEIGHTS, w_final)
-    print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
+    print(f"[Saved] Final weights → {config.SAVE_WEIGHTS}")
 
+    print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
     print(f"[Final Training] {time.time() - t_final:.1f}s")
     return w_final
 
@@ -46,9 +90,9 @@ def make_submission(X_te, w_final, best_thr, test_ids):
 
 
 def main():
-    t = time.time()
+    t0 = time.time()
     Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights = preprocessing.preprocess2()
-    print(f"[Preprocessing] {time.time() - t:.1f}s")
+    print(f"[Preprocessing] {time.time() - t0:.1f}s")
 
     #==========================================
     t = time.time()   
@@ -57,7 +101,7 @@ def main():
     print(f"[Tuning] {time.time() - t:.1f}s")
 
     #==========================================
-    # Extract parameters
+    # Extract parameters 
     best_lambda = best_params['lambda']
     best_gamma = best_params['gamma']
     best_threshold = best_params['optimal_threshold']
@@ -66,13 +110,12 @@ def main():
     #Final training + submission
     t = time.time()   
     if config.SUBMISSION:
-        # Enregistre les courbes train/val avec un holdout (run séparé, honnête)
         w_final = train_final_model(
             Xtr, ytr_01, best_lambda, best_gamma
         )
         make_submission(Xte, w_final, best_threshold, test_ids)
-        print(f"[TOTAL] {time.time() - t:.1f}s.")
-    print(f"[Submission] {time.time() - t:.1f}s")
+    print(f"[Final Training + Submission] {time.time() - t:.1f}s")
+    print(f"[TOTAL] {time.time() - t0:.1f}s.")
 
 
 if __name__ == "__main__":

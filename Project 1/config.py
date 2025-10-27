@@ -37,6 +37,29 @@ GAMMA = [1e-3, 1e-2, 1e-1, 1]
 MAX_ITERS = 600
 
 
+TUNING_MAX_ITERS = 400
+#NAGFREE_TUNING = True
+
+#GAMMA_LOW = 1e-3
+#GAMMA_HIGH = 1.0
+LAMBDA_LOW = 1e-8
+LAMBDA_HIGH = 1e-5
+#NAGFREE_L_MAX = 1e8
+N_TRIALS = 10
+
+USE_ADAM_DEFAULT = True
+SCHEDULE_DEFAULT = "cosine" #cosine, exponential, none
+
+# Early stopping defaults
+EARLY_STOP_DEFAULT = True
+PATIENCE_DEFAULT = 15
+TOL_DEFAULT = 1e-8
+
+USE_WEIGHTED_BCE = True 
+
+SCHEDULE_CHOICES = ["exponential, cosine"] #cosine, exponential, none
+ADAM_CHOICES = [True] #can just be better as it just make converge faster
+
 #====================================================
 # Light One-hot Encoding 
 LOW_CARD_MAX_UNIQUE = 10    # Decides if a column should be encoded
