@@ -91,7 +91,7 @@ def make_submission(X_te, w_final, best_thr, test_ids):
 
 def main():
     t0 = time.time()
-    Xtr, Xte, ytr_01, train_ids, test_ids, sample_weights = preprocessing.preprocess2()
+    Xtr, Xte, ytr_01, train_ids, test_ids = preprocessing.preprocess2()
     print(f"[Preprocessing] {time.time() - t0:.1f}s")
 
     #==========================================
@@ -106,7 +106,8 @@ def main():
     best_gamma = best_params['gamma']
     best_threshold = best_params['optimal_threshold']
     #...
-
+    mean_f1= best_params['mean_f1']
+    print(f"Best hyperparameters found: lambda={best_lambda}, gamma={best_gamma}, threshold={best_threshold}, mean_f1={mean_f1}")
     #Final training + submission
     t = time.time()   
     if config.SUBMISSION:

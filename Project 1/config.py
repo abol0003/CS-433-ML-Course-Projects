@@ -1,5 +1,7 @@
 import os
 
+from matplotlib.dates import SA
+
 # ==========================
 # PATHS & FILES
 # ==========================
@@ -17,7 +19,7 @@ RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
 # change the name of the files, to avoid overwriting unless you don't care
 PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
 TUNING_PATH = os.path.join(SAVE_DIR, "tuning_2.csv")
-FINAL_WEIGHTS_PATH = os.path.join(SAVE_DIR, "final_weights.npy")
+SAVE_WEIGHTS = os.path.join(SAVE_DIR, "final_weights.npy")
 
 OUTPUT_PRED = "submission_best.csv"
 
@@ -25,8 +27,8 @@ OUTPUT_PRED = "submission_best.csv"
 # check the pipeline
 
 PREPROCESSING     = True    # reuse preprocessed npz if False
-HYPERPARAM_TUNING = False   # tune or load best params 
-SUBMISSION        = False   # Train final model, Save weights, 
+HYPERPARAM_TUNING = True   # tune or load best params 
+SUBMISSION        = True   # Train final model, Save weights, 
 
 RNG_SEED = 42
 
@@ -67,7 +69,7 @@ N_FOLDS = 5  # Number of folds for cross-validation
 # =========================================================
 # HYPERPARAMETER TUNING
 # =========================================================
-TUNING_MAX_ITERS = 400
+TUNING_MAX_ITERS = 500
 NAGFREE_TUNING = True
 
 GAMMA_LOW = 1e-3  # Lower bound for gamma sampling
@@ -78,7 +80,7 @@ NAGFREE_L_MAX = 1e8
 N_TRIALS = 10
 
 # Grid search parameters (for old grid search method)
-LAMBDA = [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
+LAMBDA = [1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3]
 GAMMA = [1e-3, 1e-2, 1e-1, 1]
 MAX_ITERS = 600  # Used in old implementations
 

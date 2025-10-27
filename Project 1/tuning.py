@@ -87,7 +87,7 @@ def tune_hyperparameter(X_tr, y_tr_01):
     """
     adam_choices = config.ADAM_CHOICES
     schedule_choices = config.SCHEDULE_CHOICES
-    lambda_samples = [3.96760508e-06] if schedule_choices is not None else sample_loguniform(config.LAMBDA_LOW, config.LAMBDA_HIGH, config.N_TRIALS)
+    lambda_samples =config.LAMBDA # [3.96760508e-06] if schedule_choices is not None else sample_loguniform(config.LAMBDA_LOW, config.LAMBDA_HIGH, config.N_TRIALS)
     gamma_samples = [1] if schedule_choices is not None else sample_loguniform(config.GAMMA_LOW, config.GAMMA_HIGH, config.N_TRIALS)
 
     tasks = [
@@ -111,7 +111,8 @@ def tune_hyperparameter(X_tr, y_tr_01):
 
     nproc = max(1, (os.cpu_count() or 2) - 4)
     with mp.get_context("spawn").Pool(processes=nproc) as pool:
-        results = pool.map(cv_utils.cv_train_and_eval, tasks)
+        # Each item in tasks is an argument tuple
+        results = pool.starmap(cv_utils.cv_train_and_eval, tasks)
 
     save_tuning_results(results)
 

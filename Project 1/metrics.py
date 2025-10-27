@@ -1,6 +1,6 @@
 # Metrics and label conversion functions 
 import numpy as np
-
+import config
 
 def to_01_labels(y_pm1):
     return (y_pm1 > 0).astype(np.uint8)
@@ -17,7 +17,7 @@ def accuracy_score(y_true01, y_pred01):
 
 
 def precision_recall_f1(y_true01, y_pred01):
-    eps=1e-12 ## to put in config.py !! (EPS = 1e-12 # safeguard Avoid division by 0)
+    eps=config.EPS #(EPS = 1e-12 # safeguard Avoid division by 0)
     y_true01 = np.asarray(y_true01)
     y_pred01 = np.asarray(y_pred01)
     tp = np.sum((y_true01 == 1) & (y_pred01 == 1))
