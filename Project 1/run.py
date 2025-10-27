@@ -113,7 +113,10 @@ def main():
         w_final = train_final_model(
             Xtr, ytr_01, best_lambda, best_gamma
         )
-        make_submission(Xte, w_final, best_threshold, test_ids)
+    else:
+        w_final = np.load(config.SAVE_WEIGHTS)
+    make_submission(Xte, w_final, best_threshold, test_ids)
+    
     print(f"[Final Training + Submission] {time.time() - t:.1f}s")
     print(f"[TOTAL] {time.time() - t0:.1f}s.")
 
