@@ -1,75 +1,101 @@
-# all configuration variables and constants
-import os 
+import os
 
-#====================================================
-
-DATA_DIR = r"./data/dataset/"
-OUTPUT_PRED = "submission_best.csv"
-
-PICT_DIR = "picture"
-# CONF_MAT_FIG = os.path.join(PICT_DIR, "confusion_matrix.png")
-# ROC_FIG      = os.path.join(PICT_DIR, "roc_curve.png")
-# PR_FIG       = os.path.join(PICT_DIR, "pr_curve.png")
-
-# Paths 
+# ==========================
+# PATHS & FILES
+# ==========================
+DATA_DIR = "./data/dataset/"
 SAVE_DIR = "data_saving"
+PICT_DIR = "picture"
+
 RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
 
-#CHANGE iter the ..._{iter} if changes to not overwrite preproc data you might want to keep 
+# ==========================
+# before every: python run.py
+# ==========================
+
+# 1) ==========================
+# change the name of the files, to avoid overwriting unless you don't care
 PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
+TUNING_PATH = os.path.join(SAVE_DIR, "tuning_2.csv")
+FINAL_WEIGHTS_PATH = os.path.join(SAVE_DIR, "final_weights.npy")
 
-#CHANGE iter the ..._{iter} if changes in preproc data (or when needed)
-TUNING_PATH         = os.path.join(SAVE_DIR, "tuning_2.csv") # saves .csv file 
-BEST_PARAM_PATH     = os.path.join(SAVE_DIR, "bestParam_2.npz") # saves .npz file 
+OUTPUT_PRED = "submission_best.csv"
 
-SAVE_WEIGHTS        = os.path.join(SAVE_DIR, "final_weights.npy") # To not have to retrain the model ??   
-
-#====================================================
-# Pipeline
+# 2) ==========================
+# check the pipeline
 
 PREPROCESSING     = True    # reuse preprocessed npz if False
 HYPERPARAM_TUNING = False   # tune or load best params 
-SUBMISSION        = False   # Train final model, Save weights, Submission file
-#====================================================
-#Tuning
-LAMBDA = [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
-GAMMA = [1e-3, 1e-2, 1e-1, 1]
-MAX_ITERS = 600
+SUBMISSION        = False   # Train final model, Save weights, 
+
+RNG_SEED = 42
 
 
+# =========================================================
+# PREPROCESSING PARAMETERS
+# =========================================================
+DROP_FIRST_N_CAT_COLS = 26
+LOW_CARD_MAX_UNIQUE = 20
+MAX_ADDED_ONEHOT = 2000
+ONEHOT_DROP_FIRST = True
+
+PCA_VAR = 0.97
+PCA_Local = {"variance_ratio": PCA_VAR, "min_cols": 8, "replace": True}
+PCA_K = None
+ORDINAL_ENCODE = True
+ORDINAL_SCALE_TO_UNIT = True
+
+NAN_INDICATOR_MIN_ABS_CORR = 0.1
+NAN_INDICATOR_TOPK = None
+NAN_INDICATOR_MIN_PREV = 0.1
+NAN_INDICATOR_MAX_PREV = 0.9
+
+STD_CONT = False
+
+POLY_ENABLE = False
+POLY_ADD_SQUARES_CONT = True
+POLY_ADD_INTER_CONT = False
+POLY_TOPK_PAIRS = 256
+POLY_MIN_ABS_CORR = 0.00
+
+PRUNE_CORR_THRESHOLD = 0.90
+ADD_BIAS = False
+
+EPS = 1e-12  # Avoid division by 0
+N_FOLDS = 5  # Number of folds for cross-validation
+
+# =========================================================
+# HYPERPARAMETER TUNING
+# =========================================================
 TUNING_MAX_ITERS = 400
-#NAGFREE_TUNING = True
+NAGFREE_TUNING = True
 
-#GAMMA_LOW = 1e-3
-#GAMMA_HIGH = 1.0
+GAMMA_LOW = 1e-3  # Lower bound for gamma sampling
+GAMMA_HIGH = 1.0  # Upper bound for gamma sampling
 LAMBDA_LOW = 1e-8
 LAMBDA_HIGH = 1e-5
-#NAGFREE_L_MAX = 1e8
+NAGFREE_L_MAX = 1e8
 N_TRIALS = 10
 
-USE_ADAM_DEFAULT = True
-SCHEDULE_DEFAULT = "cosine" #cosine, exponential, none
+# Grid search parameters (for old grid search method)
+LAMBDA = [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1]
+GAMMA = [1e-3, 1e-2, 1e-1, 1]
+MAX_ITERS = 600  # Used in old implementations
 
-# Early stopping defaults
+USE_ADAM_DEFAULT = True
+SCHEDULE_DEFAULT = "cosine"  # cosine, exponential, none
 EARLY_STOP_DEFAULT = True
 PATIENCE_DEFAULT = 15
 TOL_DEFAULT = 1e-8
 
-USE_WEIGHTED_BCE = True 
+USE_WEIGHTED_BCE = True
 
-SCHEDULE_CHOICES = ["exponential, cosine"] #cosine, exponential, none
-ADAM_CHOICES = [True] #can just be better as it just make converge faster
+SCHEDULE_CHOICES = ["exponential, cosine"]  # cosine, exponential, none
+ADAM_CHOICES = [True]  # can just be better as it just make converge faster
 
-#====================================================
-# Light One-hot Encoding 
-LOW_CARD_MAX_UNIQUE = 10    # Decides if a column should be encoded
-ONEHOT_PER_FEAT_MAX = 8     
-MAX_ADDED_ONEHOT    = 120   # Limits the total number of new columns added by encoding
 
-#====================================================
-K = 250 # for PCA
-EPS = 1e-12 # Avoid division by 0
-N_FOLDS = 5
-
-RNG_SEED = 42
-
+# =========================================================
+# FINAL TRAINING & SUBMISSION
+# =========================================================
+FINAL_MAX_ITERS = 400
+CV_KFOLD_PREDICTION = False
