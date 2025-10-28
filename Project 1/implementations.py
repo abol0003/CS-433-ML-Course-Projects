@@ -366,12 +366,12 @@ def logistic_gradient(y, tx, w, lambda_=0):
     p = sigmoid(tx.dot(w))
     resid = p - y
 
-    if getattr(config, "USE_WEIGHTED_BCE", False):
+    if config.USE_WEIGHTED_BCE:
         n_tot = float(y.size)
         n_pos = float(np.sum(y))
         n_neg = n_tot - n_pos
-        a_pos = n_tot / (2.0 * max(1.0, n_pos))
-        a_neg = n_tot / (2.0 * max(1.0, n_neg))
+        a_pos = n_tot / (4.0 * max(1.0, n_pos))
+        a_neg = n_tot / (1.0 * max(1.0, n_neg))
         w_samp = (y * a_pos + (1.0 - y) * a_neg).astype(np.float32, copy=False)
         denom_w = float(np.sum(w_samp))
         grad = tx.T.dot(resid * w_samp) / denom_w

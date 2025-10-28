@@ -100,16 +100,17 @@ def tune_hyperparameter(X_tr, y_tr_01):
             config.TUNING_MAX_ITERS,
             adam,
             sched,
-            getattr(config, "EARLY_STOP_DEFAULT", False),
-            getattr(config, "PATIENCE_DEFAULT", 10),
-            getattr(config, "TOL_DEFAULT", 1e-6),
+            config.EARLY_STOP_DEFAULT,
+            config.PATIENCE_DEFAULT,
+            config.TOL_DEFAULT,
         )
-        for lam, gam in zip(lambda_samples, gamma_samples)
+        for lam in lambda_samples
+        for gam in gamma_samples
         for adam in adam_choices
         for sched in schedule_choices
     ]
 
-    nproc = max(1, (os.cpu_count() or 2) - 4)
+    nproc = max(1, (os.cpu_count() or 4) - 10)
     with mp.get_context("spawn").Pool(processes=nproc) as pool:
         # Each item in tasks is an argument tuple
         results = pool.starmap(cv_utils.cv_train_and_eval, tasks)

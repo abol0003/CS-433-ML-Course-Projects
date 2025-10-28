@@ -1,7 +1,6 @@
 # Cross-validation and training utilities 
 import numpy as np 
 import metrics
-import math
 import implementations
 import config 
 
@@ -335,7 +334,7 @@ def cv_train_and_eval(y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_nam
             schedule=schedule,
             early_stopping=bool(early_stopping),
             patience=patience,
-            tol=tol if tol > 0 else getattr(config, "TOL_DEFAULT", 1e-8),
+            tol=tol if tol > 0 else config.TOL_DEFAULT,
             verbose=False,
             val_data=(y_tr_01[va_idx], X_tr[va_idx]) if early_stopping else None,
         )

@@ -56,13 +56,13 @@ def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma, use_adam=None, sch
 
     final_use_adam = use_adam if use_adam is not None else config.USE_ADAM_DEFAULT
     final_sched_name = schedule_name if schedule_name is not None else config.SCHEDULE_DEFAULT
-    if final_sched_name == "cosine":
-        schedule = cv_utils.schedule_cosine
-    elif final_sched_name == "exponential":
-        schedule = cv_utils.schedule_exponential
+    if final_sched_name == "nagfree":
+        schedule = cv_utils.schedule_nagfree
+    elif final_sched_name == "onecycle":
+        schedule = cv_utils.schedule_onecycle
     else:
         schedule = None
-
+    print(f"[Final Training] Using schedule: {final_sched_name}, Adam: {final_use_adam} with lambda={best_lambda}, gamma={best_gamma}")
     w_final, final_loss = implementations.reg_logistic_regression(
         y_tr_01, X_tr, best_lambda, w0,
         max_iters=config.FINAL_MAX_ITERS,
@@ -105,6 +105,8 @@ def main():
     best_lambda = best_params['lambda']
     best_gamma = best_params['gamma']
     best_threshold = best_params['optimal_threshold']
+    best_adam= best_params['adam']
+    best_schedule= best_params['schedule']
     #...
     mean_f1= best_params['mean_f1']
     print(f"Best hyperparameters found: lambda={best_lambda}, gamma={best_gamma}, threshold={best_threshold}, mean_f1={mean_f1}")
@@ -112,7 +114,8 @@ def main():
     t = time.time()   
     if config.SUBMISSION:
         w_final = train_final_model(
-            Xtr, ytr_01, best_lambda, best_gamma
+            Xtr, ytr_01, best_lambda, best_gamma,
+            use_adam=best_adam, schedule_name=best_schedule
         )
     else:
         w_final = np.load(config.SAVE_WEIGHTS)
