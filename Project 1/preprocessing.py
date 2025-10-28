@@ -212,11 +212,6 @@ def one_hot_encoding_selected(
     Returns:
         tuple: (Xtr_new, Xte_new, plan, keep_idx, dummy_map)
     """
-    Xtr = np.asarray(Xtr)
-    Xte = np.asarray(Xte)
-    n_tr, d = Xtr.shape
-    assert Xte.shape[1] == d
-
     if total_cap is None:
         total_cap = config.MAX_ADDED_ONEHOT
 
@@ -901,15 +896,15 @@ def encode_ordinal_as_score(Xtr, Xte, ord_idx, scale_to_unit=True):
     Returns:
         tuple: (Xtr_new, Xte_new, spec) with per-column mapping metadata.
     """
-    Xtr = np.asarray(Xtr, np.float32).copy()
-    Xte = np.asarray(Xte, np.float32).copy()
+    Xtr = np.asarray(Xtr, np.float32)
+    Xte = np.asarray(Xte, np.float32)
     ordinal_maps = {}
 
     for j in ord_idx:
         vtr = Xtr[:, j]
         cats_sorted = np.unique(vtr[~np.isnan(vtr)])
         if len(cats_sorted) == 0:
-            ordinal_maps[j] = {"levels": [], "K": 1, "scaled": bool(scale_to_unit)}
+            ordinal_maps[j] = {"levels": [], "K": 1, "scaled": scale_to_unit}
             continue
 
         K = max(len(cats_sorted) - 1, 1)
