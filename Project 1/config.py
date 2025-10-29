@@ -1,6 +1,5 @@
 import os
 
-from matplotlib.dates import SA
 
 # ==========================
 # PATHS & FILES
@@ -18,7 +17,7 @@ RAW_DATA = os.path.join(SAVE_DIR, "raw_data.npz")
 # 1) ==========================
 # change the name of the files, to avoid overwriting unless you don't care
 PREPROC_DATA_PATH = os.path.join(SAVE_DIR, "preproc_data_2.npz")
-TUNING_PATH = os.path.join(SAVE_DIR, "tuning_iter__600.csv")
+TUNING_PATH = os.path.join(SAVE_DIR, "tuning_iter_400.csv")
 SAVE_WEIGHTS = os.path.join(SAVE_DIR, "final_weights.npy")
 
 OUTPUT_PRED = "submission_best.csv"
@@ -26,7 +25,7 @@ OUTPUT_PRED = "submission_best.csv"
 # 2) ==========================
 # check the pipeline
 
-PREPROCESSING     = False    # reuse preprocessed npz if False
+PREPROCESSING     = True    # reuse preprocessed npz if False
 HYPERPARAM_TUNING = True   # tune or load best params 
 SUBMISSION        = True   # Train final model, Save weights, 
 
@@ -69,7 +68,7 @@ N_FOLDS = 5  # Number of folds for cross-validation
 # =========================================================
 # HYPERPARAMETER TUNING
 # =========================================================
-TUNING_MAX_ITERS = 600
+TUNING_MAX_ITERS = 400
 
 # GAMMA_LOW = 1e-3  # Lower bound for gamma sampling
 # GAMMA_HIGH = 1.0  # Upper bound for gamma sampling
@@ -96,4 +95,4 @@ ADAM_CHOICES = [True]  # can just be better as it just make converge faster
 # =========================================================
 # FINAL TRAINING & SUBMISSION
 # =========================================================
-FINAL_MAX_ITERS = 600
+FINAL_MAX_ITERS = 400

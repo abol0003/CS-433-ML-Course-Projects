@@ -640,11 +640,11 @@ def filter_add_predictive_nan_indicators(
 
     # ---- 1) ----
     test_nan_rate = np.isnan(Xte).mean(axis=0) if len(Xte) > 0 else np.array([], dtype=np.float32)
-    keep_cols = test_nan_rate < 0.30 if len(test_nan_rate) > 0 else np.array([], dtype=bool)
+    keep_cols = test_nan_rate < 0.70 if len(test_nan_rate) > 0 else np.array([], dtype=bool)
     if len(test_nan_rate) > 0 and not np.all(keep_cols):
         n_drop = int((~keep_cols).sum())
         n_keep = int(keep_cols.sum())
-        print(f"[Preprocess] NaN-based feature filter (test): dropped={n_drop}, kept={n_keep}, thr=0.30")
+        print(f"[Preprocess] NaN-based feature filter (test): dropped={n_drop}, kept={n_keep}, thr=0.70")
         if n_keep == 0:
             return Xtr[:, :0] , Xte[:, :0] 
         Xtr = Xtr[:, keep_cols]
