@@ -267,7 +267,7 @@ def one_hot_encoding_selected(
         added_total += k_add
         dummy_map[j] = []
 
-    keep_idx = [jj for jj in range(d) if jj not in used_idx]
+    keep_idx = [jj for jj in range(Xtr.shape[1]) if jj not in used_idx]
     Xtr_keep, Xte_keep = Xtr[:, keep_idx], Xte[:, keep_idx]
 
     if new_tr_cols:
