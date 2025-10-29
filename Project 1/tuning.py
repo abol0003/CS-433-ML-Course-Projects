@@ -138,7 +138,7 @@ def save_tuning_results(results_list, filepath_csv=config.TUNING_PATH):
         
         # Write each result row
         for r in results_list:
-            f.write(f"{r['lambda']:.6f},{r['gamma']:.6f},{r['max_iters']},"
+            f.write(f"{r['lambda']:.9f},{r['gamma']:.6f},{r['max_iters']},"
                    f"{int(r['adam'])},{r['schedule']},"
                    f"{r['mean_accuracy']:.6f},{r['std_accuracy']:.6f},"
                    f"{r['mean_precision']:.6f},{r['std_precision']:.6f},"
