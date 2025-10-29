@@ -96,4 +96,4 @@ ADAM_CHOICES = [True]  # can just be better as it just make converge faster
 # =========================================================
 # FINAL TRAINING & SUBMISSION
 # =========================================================
-FINAL_MAX_ITERS = 600
+FINAL_MAX_ITERS = 400
