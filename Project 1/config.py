@@ -25,9 +25,9 @@ OUTPUT_PRED = "submission_best.csv"
 # 2) ==========================
 # check the pipeline
 
-PREPROCESSING     = True    # reuse preprocessed npz if False
-HYPERPARAM_TUNING = True   # tune or load best params 
-SUBMISSION        = True   # Train final model, Save weights, 
+PREPROCESSING     = False    # reuse preprocessed npz if False
+HYPERPARAM_TUNING = False   # tune or load best params 
+SUBMISSION        = False   # Train final model, Save weights, 
 
 RNG_SEED = 42
 
@@ -70,23 +70,20 @@ N_FOLDS = 5  # Number of folds for cross-validation
 # =========================================================
 TUNING_MAX_ITERS = 400
 
-# GAMMA_LOW = 1e-3  # Lower bound for gamma sampling
-# GAMMA_HIGH = 1.0  # Upper bound for gamma sampling
-LAMBDA_LOW = 1e-8
-LAMBDA_HIGH = 1e-5
+
 N_TRIALS = 10
 
 # Grid search parameters (for old grid search method)
 LAMBDA = [1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3,1e-2,1e-1]
 GAMMA = [1e-3, 1e-2, 1e-1, 1]
 
-USE_ADAM_DEFAULT = True
-SCHEDULE_DEFAULT = "nagfree"  # nagfree, onecycle, none
+USE_ADAM_DEFAULT = False
+SCHEDULE_DEFAULT = "none"  # nagfree, onecycle, none
 EARLY_STOP_DEFAULT = False
 PATIENCE_DEFAULT = 15
 TOL_DEFAULT = 1e-8
 
-USE_WEIGHTED_BCE = True
+USE_WEIGHTED_BCE = False
 
 SCHEDULE_CHOICES = ["nagfree"]  # nagfree, onecycle, none
 ADAM_CHOICES = [True]  # can just be better as it just make converge faster

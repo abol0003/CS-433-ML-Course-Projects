@@ -16,23 +16,6 @@ os.makedirs(config.PICT_DIR, exist_ok=True)
 os.makedirs(config.SAVE_DIR, exist_ok=True)
 np.random.seed(config.RNG_SEED)
 
-
-# def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma):
-#     t_final = time.time()
-
-#     w0 = np.zeros(X_tr.shape[1], dtype=np.float32)
-#     w_final, final_loss = implementations.reg_logistic_regression(
-#         y_tr_01, X_tr, best_lambda, w0, max_iters=config.MAX_ITERS, gamma=best_gamma
-#     )
-#     print(f"[Final] loss (unpenalized) = {final_loss:.6f}")
-
-#     np.save(config.SAVE_WEIGHTS, w_final)
-#     print(f"[Saved] Final weights -> {config.SAVE_WEIGHTS}")
-
-#     print(f"[Final Training] {time.time() - t_final:.1f}s")
-#     return w_final
-
-
 def train_final_model(X_tr, y_tr_01, best_lambda, best_gamma, use_adam=None, schedule_name=None):
     """Train the final logistic model on the entire training dataset.
 

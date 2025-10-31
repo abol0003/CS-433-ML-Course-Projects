@@ -106,109 +106,6 @@ def find_optimal_threshold(y_true, y_prob):
     )
 
 
-# def cross_validate_logistic_regression(y, X, lambda_, gamma, max_iters=config.MAX_ITERS):
-#     """
-#     Perform k-fold cross-validation for regularized logistic regression.
-    
-#     Trains a model on each fold, finds the optimal classification threshold
-#     that maximizes F1 score across all validation data, and evaluates
-#     performance metrics per fold.
-    
-#     Args:
-#         y: Binary labels (0 or 1), shape (n_samples,)
-#         X: Feature matrix, shape (n_samples, n_features)
-#         folds: List of (train_indices, val_indices) tuples
-#         lambda_: L2 regularization strength
-#         gamma: Gradient descent step size
-#         max_iters: Maximum number of training iterations
-        
-#     Returns:
-#         dict: Cross-validation results containing:
-#             - 'lambda': Regularization parameter
-#             - 'learning_rate': Learning rate used
-#             - 'max_iters': Maximum iterations used
-#             - 'optimal_threshold': Best classification threshold
-#             - 'mean_accuracy': Average accuracy across folds
-#             - 'std_accuracy': Standard deviation of accuracy
-#             - 'mean_precision': Average precision across folds
-#             - 'std_precision': Standard deviation of precision
-#             - 'mean_recall': Average recall across folds
-#             - 'std_recall': Standard deviation of recall
-#             - 'mean_f1': Average F1 score across folds
-#             - 'std_f1': Standard deviation of F1 across folds
-#     """
-#     n_features = X.shape[1]
-#     folds = create_stratified_folds(y)
-    
-#     # Phase 1: Train models and collect validation predictions
-#     fold_predictions = []
-#     fold_indices = []
-    
-#     for train_idx, val_idx in folds:
-#         # Initialize weights
-#         initial_w = np.zeros(n_features, dtype=np.float64) # put this in config.py ??
-        
-#         # Train model on this fold
-#         weights, _ = implementations.reg_logistic_regression( 
-#             y[train_idx], X[train_idx], lambda_, initial_w, max_iters, gamma
-#         )
-        
-#         # Get validation predictions
-#         val_probabilities = implementations.sigmoid(X[val_idx] @ weights)
-        
-#         fold_predictions.append(val_probabilities)
-#         fold_indices.append(val_idx)
-    
-#     # Phase 2: Find optimal threshold across all validation data
-#     all_val_indices = np.concatenate(fold_indices)
-#     all_val_probabilities = np.concatenate(fold_predictions)
-#     all_val_labels = y[all_val_indices]
-    
-#     optimal_threshold, _, _, _ = find_optimal_threshold(
-#         all_val_labels, all_val_probabilities
-#     )
-    
-#     # Phase 3: Evaluate each fold with the optimal threshold
-#     fold_metrics = {
-#         'accuracy': [],
-#         'precision': [],
-#         'recall': [],
-#         'f1': []
-#     }
-    
-#     for val_probs, val_idx in zip(fold_predictions, fold_indices):
-#         predictions = (val_probs >= optimal_threshold).astype(int)
-#         true_labels = y[val_idx]
-        
-#         fold_metrics['accuracy'].append(
-#             metrics.accuracy_score(true_labels, predictions)
-#         )
-        
-#         precision, recall, f1 = metrics.precision_recall_f1(
-#             true_labels, 
-#             predictions
-#         )
-#         fold_metrics['precision'].append(precision)
-#         fold_metrics['recall'].append(recall)
-#         fold_metrics['f1'].append(f1)
-    
-#     # Return structured results with all statistics
-#     return {
-#         'lambda': float(lambda_),
-#         'gamma': float(gamma),
-#         'max_iters': int(max_iters),
-#         'mean_accuracy': float(np.mean(fold_metrics['accuracy'])),
-#         'std_accuracy': float(np.std(fold_metrics['accuracy'])),
-#         'mean_precision': float(np.mean(fold_metrics['precision'])),
-#         'std_precision': float(np.std(fold_metrics['precision'])),
-#         'mean_recall': float(np.mean(fold_metrics['recall'])),
-#         'std_recall': float(np.std(fold_metrics['recall'])),
-#         'mean_f1': float(np.mean(fold_metrics['f1'])),
-#         'std_f1': float(np.std(fold_metrics['f1'])),
-#         'optimal_threshold': float(optimal_threshold)
-#     }
-
-#==========================================
 
 def schedule_onecycle(lr0, t, T, pct_start=0.3, max_lr_ratio=10.0, min_lr_ratio=1e-3):
     """
@@ -305,9 +202,6 @@ def cv_train_and_eval(y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_nam
             - 'adam' (bool): Whether Adam optimizer was used
             - 'schedule' (str): Learning rate schedule used ('nagfree', 'onecycle', or 'none')
     """
-    # (
-    #     y_tr_01, X_tr, lam, gam, max_iters, use_adam, schedule_name, early_stopping, patience, tol
-    # ) = args
 
     folds = create_stratified_folds(y_tr_01)
 

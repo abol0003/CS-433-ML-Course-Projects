@@ -87,8 +87,8 @@ def tune_hyperparameter(X_tr, y_tr_01):
     """
     adam_choices = config.ADAM_CHOICES
     schedule_choices = config.SCHEDULE_CHOICES
-    lambda_samples =config.LAMBDA # [3.96760508e-06] if schedule_choices is not None else sample_loguniform(config.LAMBDA_LOW, config.LAMBDA_HIGH, config.N_TRIALS)
-    gamma_samples = [1] if schedule_choices is not None else sample_loguniform(config.GAMMA_LOW, config.GAMMA_HIGH, config.N_TRIALS)
+    lambda_samples =config.LAMBDA # find optimal regularization
+    gamma_samples = [1] #put to 1 because adaptif by shcedule during training each epoch
 
     tasks = [
         (
@@ -147,34 +147,6 @@ def save_tuning_results(results_list, filepath_csv=config.TUNING_PATH):
                    f"{r['optimal_threshold']:.6f}\n")
     
     print(f"[Saved] All grid search results ({len(results_list)} combinations) -> {filepath_csv}")
-
-
-#==========================================
-
-# # SUPPRESS IF YOU CAN GET THE BEST PARAM QUICKLY WITH .csv
-# def load_tuning_results(filepath_npz=config.BEST_PARAM_PATH): 
-#     """Load best hyperparameters from disk."""
-#     if not os.path.exists(filepath_npz):
-#         raise FileNotFoundError(f"{filepath_npz} not found.")
-    
-#     npz = np.load(filepath_npz)
-#     results = {
-#         'lambda': float(npz['lambda_']),
-#         'gamma': float(npz['gamma']),
-#         'optimal_threshold': float(npz['optimal_threshold']),
-#         'max_iters': int(npz['max_iters']),
-#         'mean_f1': float(npz['mean_f1']),
-#         'std_f1': float(npz['std_f1']),
-#         'mean_accuracy': float(npz['mean_accuracy']),
-#         'std_accuracy': float(npz['std_accuracy']),
-#         'mean_precision': float(npz['mean_precision']),
-#         'std_precision': float(npz['std_precision']),
-#         'mean_recall': float(npz['mean_recall']),
-#         'std_recall': float(npz['std_recall'])
-#     }
-    
-#     print(f"[Loaded] Best hyperparameters from -> {filepath_npz}")
-#     return results
 
 
 def load_best_from_csv(filepath_csv=config.TUNING_PATH):
